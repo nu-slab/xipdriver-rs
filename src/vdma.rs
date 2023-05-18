@@ -57,7 +57,7 @@ impl AxiVdma {
             hwh.vlnv
         );
         let uio = mem::new(uio_name)?;
-        let udmabuf = UdmabufAccessor::new(udmabuf_name, true).unwrap();
+        let udmabuf = UdmabufAccessor::new(udmabuf_name, false).unwrap();
         Ok(AxiVdma {
             hwh: hwh.clone(),
             uio_acc: uio,
