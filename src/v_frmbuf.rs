@@ -8,10 +8,10 @@ pub struct VideoFrameBufRead {
     pub hwh: hwh_parser::Ip,
     uio_acc: mem::UioAccessor<usize>,
     udmabuf_acc: mem::UdmabufAccessor<usize>,
-    fmt: u32,
-    pub image_width: u32,
-    pub image_height: u32,
-    image_bytes_per_pix: u32,
+    fmt_id: u32,
+    pub frame_width: u32,
+    pub frame_height: u32,
+    bytes_per_pix: u32,
 }
 
 impl VideoFrameBufRead {
@@ -28,10 +28,10 @@ impl VideoFrameBufRead {
             hwh: hwh.clone(),
             uio_acc: uio,
             udmabuf_acc: udmabuf,
-            fmt: 12,
-            image_height: 1280,
-            image_width: 720,
-            image_bytes_per_pix: 2,
+            fmt_id: 12,
+            frame_height: 1280,
+            frame_width: 720,
+            bytes_per_pix: 2,
         })
     }
 
@@ -57,10 +57,18 @@ impl VideoFrameBufRead {
         }
     }
     pub fn start(&self) {
-        let reg = unsafe { self.uio_acc.read_mem32(0x00) } & 0x80;
+        self.write_format();
         unsafe {
-            self.uio_acc.write_mem32(0x00, reg | 1);
+            self.uio_acc.write_mem32(0x00, 0x81);
         }
+    }
+    pub fn start_once(&self) {
+        unsafe {
+            self.uio_acc.write_mem32(0x00, 0x01);
+        }
+    }
+    pub fn stop(&self) {
+        self.set_auto_restart_enable(false);
     }
     pub fn set_framebuf_addr(&self) {
         unsafe {
@@ -76,12 +84,12 @@ impl VideoFrameBufRead {
     pub fn set_format(&mut self, fmt: &str) {
         match fmt {
             "YUYV" => {
-                self.fmt = 12;
-                self.image_bytes_per_pix = 2;
+                self.fmt_id = 12;
+                self.bytes_per_pix = 2;
             },
             "RGB8" => {
-                self.fmt = 20;
-                self.image_bytes_per_pix = 3;
+                self.fmt_id = 20;
+                self.bytes_per_pix = 3;
             },
             _ => {
                 unimplemented!();
@@ -89,7 +97,7 @@ impl VideoFrameBufRead {
         }
     }
     pub fn get_format(&self) -> &str {
-        match self.fmt {
+        match self.fmt_id {
             12 => {
                 "YUYV"
             },
@@ -103,18 +111,11 @@ impl VideoFrameBufRead {
     }
     pub fn write_format(&self) {
         unsafe {
-            self.uio_acc.write_mem32(0x10, self.image_width);
-            self.uio_acc.write_mem32(0x18, self.image_height);
+            self.uio_acc.write_mem32(0x10, self.frame_width);
+            self.uio_acc.write_mem32(0x18, self.frame_height);
             self.uio_acc
-                .write_mem32(0x20, self.image_width * self.image_bytes_per_pix);
-            self.uio_acc.write_mem32(0x28, self.fmt);
-            println!(
-                "Width: {}, Height: {}, Stride: {}, Fmt: {}",
-                self.uio_acc.read_mem32(0x10),
-                self.uio_acc.read_mem32(0x18),
-                self.uio_acc.read_mem32(0x20),
-                self.uio_acc.read_mem32(0x28)
-            )
+                .write_mem32(0x20, self.frame_width * self.bytes_per_pix);
+            self.uio_acc.write_mem32(0x28, self.fmt_id);
         }
     }
 }
@@ -123,10 +124,10 @@ pub struct VideoFrameBufWrite {
     pub hwh: hwh_parser::Ip,
     uio_acc: mem::UioAccessor<usize>,
     udmabuf_acc: mem::UdmabufAccessor<usize>,
-    fmt: u32,
-    pub image_width: u32,
-    pub image_height: u32,
-    image_bytes_per_pix: u32,
+    fmt_id: u32,
+    pub frame_width: u32,
+    pub frame_height: u32,
+    bytes_per_pix: u32,
 }
 
 impl VideoFrameBufWrite {
@@ -143,10 +144,10 @@ impl VideoFrameBufWrite {
             hwh: hwh.clone(),
             uio_acc: uio,
             udmabuf_acc: udmabuf,
-            fmt: 12,
-            image_height: 1280,
-            image_width: 720,
-            image_bytes_per_pix: 2,
+            fmt_id: 12,
+            frame_height: 1280,
+            frame_width: 720,
+            bytes_per_pix: 2,
         })
     }
 
@@ -172,10 +173,19 @@ impl VideoFrameBufWrite {
         }
     }
     pub fn start(&self) {
-        let reg = unsafe { self.uio_acc.read_mem32(0x00) } & 0x80;
+        self.write_format();
+        self.set_framebuf_addr();
         unsafe {
-            self.uio_acc.write_mem32(0x00, reg | 1);
+            self.uio_acc.write_mem32(0x00, 0x81);
         }
+    }
+    pub fn start_once(&self) {
+        unsafe {
+            self.uio_acc.write_mem32(0x00, 0x01);
+        }
+    }
+    pub fn stop(&self) {
+        self.set_auto_restart_enable(false);
     }
     pub fn set_framebuf_addr(&self) {
         unsafe {
@@ -184,27 +194,25 @@ impl VideoFrameBufWrite {
         }
     }
     pub fn read_frame(&self) -> image::RgbImage {
-        let w = self.image_width as usize;
-        let h = self.image_height as usize;
-        let bpp = self.image_bytes_per_pix as usize;
+        let w = self.frame_width as usize;
+        let h = self.frame_height as usize;
+        let bpp = self.bytes_per_pix as usize;
         let mut buf = Vec::with_capacity(w * h * bpp);
-        println!("len: {}", buf.len());
         unsafe {
             self.udmabuf_acc.copy_to(0x00, buf.as_mut_ptr(),  w * h * bpp);
             buf.set_len(w * h * bpp);
         }
-        println!("len: {}", buf.len());
-        image::ImageBuffer::from_raw(self.image_width, self.image_height, buf).unwrap()
+        image::ImageBuffer::from_raw(self.frame_width, self.frame_height, buf).unwrap()
     }
     pub fn set_format(&mut self, fmt: &str) {
         match fmt {
             "YUYV" => {
-                self.fmt = 12;
-                self.image_bytes_per_pix = 2;
+                self.fmt_id = 12;
+                self.bytes_per_pix = 2;
             },
             "RGB8" => {
-                self.fmt = 20;
-                self.image_bytes_per_pix = 3;
+                self.fmt_id = 20;
+                self.bytes_per_pix = 3;
             },
             _ => {
                 unimplemented!();
@@ -212,7 +220,7 @@ impl VideoFrameBufWrite {
         }
     }
     pub fn get_format(&self) -> &str {
-        match self.fmt {
+        match self.fmt_id {
             12 => {
                 "YUYV"
             },
@@ -226,18 +234,11 @@ impl VideoFrameBufWrite {
     }
     pub fn write_format(&self) {
         unsafe {
-            self.uio_acc.write_mem32(0x10, self.image_width);
-            self.uio_acc.write_mem32(0x18, self.image_height);
+            self.uio_acc.write_mem32(0x10, self.frame_width);
+            self.uio_acc.write_mem32(0x18, self.frame_height);
             self.uio_acc
-                .write_mem32(0x20, self.image_width * self.image_bytes_per_pix);
-            self.uio_acc.write_mem32(0x28, self.fmt);
-            println!(
-                "Width: {}, Height: {}, Stride: {}, Fmt: {}",
-                self.uio_acc.read_mem32(0x10),
-                self.uio_acc.read_mem32(0x18),
-                self.uio_acc.read_mem32(0x20),
-                self.uio_acc.read_mem32(0x28)
-            )
+                .write_mem32(0x20, self.frame_width * self.bytes_per_pix);
+            self.uio_acc.write_mem32(0x28, self.fmt_id);
         }
     }
 }

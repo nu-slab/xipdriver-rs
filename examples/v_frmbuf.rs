@@ -27,12 +27,9 @@ fn main() {
     let frame_height = 720;
 
     // v_frmbuf_read config
-    vfb_r.image_width = frame_width;
-    vfb_r.image_height = frame_height;
+    vfb_r.frame_width = frame_width;
+    vfb_r.frame_height = frame_height;
     vfb_r.set_format("YUYV");
-    vfb_r.set_auto_restart_enable(true);
-    vfb_r.write_format();
-    vfb_r.set_framebuf_addr();
 
     // v_proc config
     csc.set_frame_size(frame_width, frame_height);
@@ -40,20 +37,13 @@ fn main() {
     csc.set_auto_restart_enable(true);
 
     // v_frmbuf_write config
-    vfb_w.image_width = frame_width;
-    vfb_w.image_height = frame_height;
+    vfb_w.frame_width = frame_width;
+    vfb_w.frame_height = frame_height;
     vfb_w.set_format("RGB8");
-    vfb_w.set_auto_restart_enable(true);
-    vfb_w.write_format();
-    vfb_w.set_framebuf_addr();
 
     // generate test frame
     let frame: Vec<u8> = vec![0xFF; 1280 * 720 * 3];
     let frame_yuyv = rgb2yuyv(&frame);
-    for i in 0..10 {
-        print!("{} ", frame_yuyv[i]);
-    }
-    println!();
 
     // write frame to v_frmbuf_read
     vfb_r.write_frame(&frame_yuyv);
@@ -65,13 +55,15 @@ fn main() {
 
     println!("read");
     let rgb_frame = vfb_w.read_frame();
+
     println!("save");
     rgb_frame.save("out.png").unwrap();
+
     println!("done");
 
-    vfb_r.set_auto_restart_enable(false);
+    vfb_r.stop();
     csc.set_auto_restart_enable(false);
-    vfb_w.set_auto_restart_enable(false);
+    vfb_w.stop();
 }
 
 fn rgb2yuyv(rgb: &[u8]) -> Vec<u8> {
