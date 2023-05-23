@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
+image = "0.24.6"
 jelly-mem_access = "0.1.8"
 roxmltree = "0.4.1"
