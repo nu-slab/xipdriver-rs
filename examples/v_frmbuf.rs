@@ -40,7 +40,7 @@ fn main() {
         vfb_r.write_frame(frame.as_ptr());
 
         // Read from v_frmbuf_write
-        let rgb_frame = vfb_w.read_frame();
+        let rgb_frame = vfb_w.read_frame_as_image();
 
         println!(
             "Pixel(0, 0): Write: [{}, {}, {}], Read: {:?}",

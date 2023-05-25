@@ -41,16 +41,16 @@ impl VideoFrameBufRead {
         unsafe { self.uio_acc.read_mem32(0x00) & 1 == 1 }
     }
     pub fn is_done(&self) -> bool {
-        unsafe { self.uio_acc.read_mem32(0x00) & 2 == 1 }
+        unsafe { self.uio_acc.read_mem32(0x00) & 2 == 2 }
     }
     pub fn is_idle(&self) -> bool {
-        unsafe { self.uio_acc.read_mem32(0x00) & 4 == 1 }
+        unsafe { self.uio_acc.read_mem32(0x00) & 4 == 4 }
     }
     pub fn is_ready(&self) -> bool {
         unsafe { self.uio_acc.read_mem32(0x00) & 1 == 0 }
     }
     pub fn get_auto_restart_enable(&self) -> bool {
-        unsafe { self.uio_acc.read_mem32(0x00) & 128 == 1 }
+        unsafe { self.uio_acc.read_mem32(0x00) & 0x80 == 0x80 }
     }
     pub fn set_auto_restart_enable(&self, en: bool) {
         let reg = if en { 0x80 } else { 0 };
@@ -76,6 +76,22 @@ impl VideoFrameBufRead {
     }
     pub fn stop(&self) {
         self.set_auto_restart_enable(false);
+        while !self.is_ready() { }
+    }
+    pub fn wait_done_interrupt(&mut self) {
+        self.uio_acc.set_irq_enable(true).unwrap();
+        unsafe {
+            self.uio_acc.write_mem32(0x04, 0x01);
+            self.uio_acc.write_mem32(0x08, 0x01);
+        }
+        if !self.is_idle() {
+            self.uio_acc.wait_irq().unwrap();
+        }
+        unsafe {
+            println!("irq: {:b}", self.uio_acc.read_mem32(0x0c) );
+            println!("{:b}", self.uio_acc.read_mem32(0x00) );
+            self.uio_acc.write_mem32(0x04, 0x00);
+        }
     }
     pub fn write_framebuf_addr(&self) {
         unsafe {
@@ -93,7 +109,7 @@ impl VideoFrameBufRead {
         unsafe {
             self.udmabuf_acc.copy_from(frame, 0x00, count);
         }
-        self.start_once();
+        self.start();
     }
     pub fn set_format(&mut self, fmt: &str) {
         match fmt {
@@ -170,16 +186,16 @@ impl VideoFrameBufWrite {
         unsafe { self.uio_acc.read_mem32(0x00) & 1 == 1 }
     }
     pub fn is_done(&self) -> bool {
-        unsafe { self.uio_acc.read_mem32(0x00) & 2 == 1 }
+        unsafe { self.uio_acc.read_mem32(0x00) & 2 == 2 }
     }
     pub fn is_idle(&self) -> bool {
-        unsafe { self.uio_acc.read_mem32(0x00) & 4 == 1 }
+        unsafe { self.uio_acc.read_mem32(0x00) & 4 == 4 }
     }
     pub fn is_ready(&self) -> bool {
         unsafe { self.uio_acc.read_mem32(0x00) & 1 == 0 }
     }
     pub fn get_auto_restart_enable(&self) -> bool {
-        unsafe { self.uio_acc.read_mem32(0x00) & 128 == 1 }
+        unsafe { self.uio_acc.read_mem32(0x00) & 0x80 == 0x80 }
     }
     pub fn set_auto_restart_enable(&self, en: bool) {
         let reg = if en { 0x80 } else { 0 };
@@ -208,7 +224,10 @@ impl VideoFrameBufWrite {
                 .write_mem32(0x30, self.udmabuf_acc.phys_addr() as u32);
         }
     }
-    pub fn read_frame(&self) -> image::RgbImage {
+    pub fn read_frame_as_image(&self) -> image::RgbImage {
+        image::ImageBuffer::from_raw(self.frame_width, self.frame_height, self.read_frame()).unwrap()
+    }
+    pub fn read_frame(&self) -> Vec<u8> {
         let w = self.frame_width as usize;
         let h = self.frame_height as usize;
         let bpp = self.bytes_per_pix as usize;
@@ -218,7 +237,7 @@ impl VideoFrameBufWrite {
                 .copy_to(0x00, buf.as_mut_ptr(), w * h * bpp);
             buf.set_len(w * h * bpp);
         }
-        image::ImageBuffer::from_raw(self.frame_width, self.frame_height, buf).unwrap()
+        buf
     }
     pub fn set_format(&mut self, fmt: &str) {
         match fmt {

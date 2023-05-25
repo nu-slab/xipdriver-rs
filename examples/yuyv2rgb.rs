@@ -1,5 +1,6 @@
 use xipdriver_rs::v_frmbuf::{VideoFrameBufRead, VideoFrameBufWrite};
 use xipdriver_rs::v_proc_ss::VideoProcSubsystemCsc;
+use std::time::Instant;
 
 fn main() {
     let map = xipdriver_rs::hwh_parser::parse("fc_design.hwh").unwrap();
@@ -46,10 +47,16 @@ fn main() {
         let frame_yuyv = rgb2yuyv(&frame);
 
         // Write to v_frmbuf_read
+        let start = Instant::now();
         vfb_r.write_frame(frame_yuyv.as_ptr());
+        let end = start.elapsed();
+        println!("Write: {} msec", end.as_secs_f32() * 1000.);
 
         // Read from v_frmbuf_write
-        let rgb_frame = vfb_w.read_frame();
+        let start = Instant::now();
+        let rgb_frame = vfb_w.read_frame_as_image();
+        let end = start.elapsed();
+        println!("Read: {} msec", end.as_secs_f32() * 1000.);
 
         println!(
             "Pixel(0, 0): WriteRGB: [{}, {}, {}], WriteYUYV: [{}, {}], Read: {:?}",
