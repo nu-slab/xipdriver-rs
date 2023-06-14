@@ -175,7 +175,7 @@ impl UmvLaneDetector {
     }
     pub fn write_fl_width(&self) -> Result<()> {
         ensure!(self.fl_width_min <= self.fl_width_max, "fl_width_max < fl_width_min");
-        let interval = self.image_height / (self.fl_width_max - self.fl_width_min);
+        let interval = self.image_height / (self.fl_width_max - self.fl_width_min + 1);
         self.write_fl_width_inc_interval(interval);
         self.write_fl_width_min();
         Ok(())

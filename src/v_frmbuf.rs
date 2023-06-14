@@ -104,11 +104,11 @@ impl VideoFrameBufRead {
         } else {
             1
         };
-        self.stop();
+        //self.stop();
         unsafe {
             self.udmabuf_acc.copy_from(frame, 0x00, count);
         }
-        self.start();
+        // self.start();
     }
     pub fn set_format(&mut self, fmt: &str) {
         match fmt {
