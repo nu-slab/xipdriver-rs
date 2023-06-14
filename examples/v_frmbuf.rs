@@ -1,3 +1,6 @@
+use std::time::Instant;
+use std::{thread, time};
+
 fn main() {
     let map = xipdriver_rs::hwh_parser::parse("fc_design.hwh").unwrap();
 
@@ -29,6 +32,7 @@ fn main() {
     vfb_w.set_format("RGB8");
 
     // start IP
+    vfb_r.start();
     vfb_w.start();
 
     println!("Write & Read frames");
@@ -37,11 +41,17 @@ fn main() {
         let frame: Vec<u8> = vec![0xFF / 9 * (9 - i); (frame_width * frame_height * 3) as usize];
 
         // Write to v_frmbuf_read
+
+        let start = Instant::now();
         vfb_r.write_frame(frame.as_ptr());
-
+        let end = start.elapsed();
+        println!("PS->PL Write time:{:03}ms", end.as_secs_f64() * 1000.0);
+        thread::sleep(time::Duration::from_millis(70));
         // Read from v_frmbuf_write
+        let start2 = Instant::now();
         let rgb_frame = vfb_w.read_frame_as_image();
-
+        let end2 = start2.elapsed();
+        println!("PL->PS Read time:{:03}ms", end2.as_secs_f64() * 1000.0);
         println!(
             "Pixel(0, 0): Write: [{}, {}, {}], Read: {:?}",
             frame[0],
