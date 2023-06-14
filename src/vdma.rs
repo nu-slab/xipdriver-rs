@@ -5,7 +5,6 @@ use anyhow::{ensure, Result, Context, bail};
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
-const BIND_TO: [&str; 2] = ["xilinx.com:ip:axi_vdma:6.2", "xilinx.com:ip:axi_vdma:6.3"];
 const MM2S_DMACR: usize = 0x00;
 const MM2S_DMASR: usize = 0x04;
 const MM2S_FRMSTORE: usize = 0x18;
@@ -61,7 +60,7 @@ impl AxiVdmaMM2S {
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&
-            name == "v_frmbuf_wr",
+            name == "axi_vdma",
             "VideoFrameBufWrite::new(): This IP is not supported. ({})",
             name
         );
