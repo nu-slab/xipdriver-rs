@@ -88,8 +88,7 @@ impl VideoFrameBufRead {
             self.uio_acc.wait_irq().unwrap();
         }
         unsafe {
-            println!("irq: {:b}", self.uio_acc.read_mem32(0x0c) );
-            println!("{:b}", self.uio_acc.read_mem32(0x00) );
+            self.uio_acc.write_mem32(0x0c, 0x01);
             self.uio_acc.write_mem32(0x04, 0x00);
         }
     }
