@@ -39,61 +39,73 @@ const S2MM_HSIZE: usize = 0xA4;
 const S2MM_FRMDLY_STRIDE: usize = 0xA8;
 const S2MM_START_ADDRESS1: usize = 0xAC;
 
-pub struct AxiVdma {
+pub struct AxiVdmaMM2S {
     pub hwh: hwh_parser::Ip,
     uio_acc: mem::UioAccessor<usize>,
-    udmabuf_acc: mem::UdmabufAccessor<usize>,
-    image_width: u32,
-    image_height: u32,
-    image_bytes_per_pix: u32,
-    image_stride: u32,
+    udmabuf_acc: Vec<mem::UdmabufAccessor<usize>>,
+    pub frame_width: u32,
+    pub frame_height: u32,
+    pub bytes_per_pix: u32,
+    pub pix_per_clk: u32,
+    desired_frame: usize,
+    frame_buffers: usize,
 }
 
-impl AxiVdma {
-    pub fn new(hwh: &hwh_parser::Ip, uio_name: &str, udmabuf_name: &str) -> Result<Self> {
+impl AxiVdmaMM2S {
+    pub fn new(hwh: &hwh_parser::Ip, uio_name: &str, udmabuf_names: &[&str]) -> Result<Self> {
         ensure!(
             BIND_TO.iter().any(|e| e == &hwh.vlnv),
             "AxiVdma::new(): This IP is not supported. ({})",
             hwh.vlnv
         );
         let uio = mem::new(uio_name)?;
-        let udmabuf = UdmabufAccessor::new(udmabuf_name, false).unwrap();
-        Ok(AxiVdma {
+        let mut udmabuf = Vec::new();
+        for udmabuf_name in udmabuf_names.iter() {
+            udmabuf.push(UdmabufAccessor::new(udmabuf_name, false).unwrap());
+        }
+
+        Ok(AxiVdmaMM2S {
             hwh: hwh.clone(),
             uio_acc: uio,
             udmabuf_acc: udmabuf,
-            image_height: 1280,
-            image_width: 720,
-            image_bytes_per_pix: 4,
-            image_stride: 4,
+            frame_height: 1280,
+            frame_width: 720,
+            bytes_per_pix: 3,
+            pix_per_clk: 1,
+            desired_frame: 1,
+            frame_buffers: 3,
         })
     }
 
     pub fn is_running(&self) -> bool {
-        unsafe {
-            self.uio_acc.read_mem32(MM2S_DMASR) & 1 == 0
-        }
+        unsafe { self.uio_acc.read_mem32(MM2S_DMASR) & 1 == 0 }
     }
 
-    fn allocate(&self) -> Result<()> {
-        let offset = 0;
-        let mem_phys_addr = self.udmabuf_acc.phys_addr() as u32;
-        ensure!(offset > 15, "allocate err");
-        unsafe {
-            self.uio_acc.write_mem32(MM2S_START_ADDRESS1 + 4 * offset, mem_phys_addr)
+    fn write_framebuf_addr(&self) -> Result<()> {
+        ensure!(self.frame_buffers < 16, "self.frame_buffers > 15");
+        for i in 0..self.frame_buffers {
+            let mem_phys_addr = self.udmabuf_acc[i].phys_addr() as u32;
+            unsafe {
+                self.uio_acc
+                    .write_mem32(MM2S_START_ADDRESS1 + 4 * i, mem_phys_addr);
+            }
         }
+
         Ok(())
     }
 
-    pub fn write_mode(&self) {
+    pub fn write_format(&self) {
+        let mmap_width_bytes = self.pix_per_clk * 8;
+        let stride = ((self.frame_width * self.bytes_per_pix + mmap_width_bytes - 1)
+            / mmap_width_bytes)
+            * mmap_width_bytes;
         unsafe {
-            self.uio_acc.write_mem32(MM2S_HSIZE, self.image_width * self.image_bytes_per_pix);
+            self.uio_acc
+                .write_mem32(MM2S_HSIZE, self.frame_width * self.bytes_per_pix);
         }
-        let mut reg = unsafe {
-            self.uio_acc.read_mem32(MM2S_FRMDLY_STRIDE)
-        };
+        let mut reg = unsafe { self.uio_acc.read_mem32(MM2S_FRMDLY_STRIDE) };
         reg &= 0xF << 24;
-        reg |= self.image_stride;
+        reg |= stride;
         unsafe {
             self.uio_acc.write_mem32(MM2S_FRMDLY_STRIDE, reg);
         }
@@ -101,7 +113,7 @@ impl AxiVdma {
 
     pub fn reload(&self) {
         unsafe {
-            self.uio_acc.write_mem32(MM2S_VSIZE, self.image_height);
+            self.uio_acc.write_mem32(MM2S_VSIZE, self.frame_height);
         }
     }
 
@@ -117,38 +129,64 @@ impl AxiVdma {
         unsafe {
             self.uio_acc.write_mem32(MM2S_DMACR, 0x00011084);
             while self.uio_acc.read_mem32(MM2S_DMACR) & 4 == 4 {}
+            self.uio_acc.write_mem32(MM2S_DMACR, 0x00011084);
         }
     }
 
-    pub fn start(&self) {
-        self.allocate();
-        self.write_mode();
+    pub fn start(&mut self) -> Result<()> {
+        self.write_framebuf_addr()?;
+        self.write_format();
         self.reload();
         unsafe {
             self.uio_acc.write_mem32(MM2S_DMACR, 0x00011089);
         }
         while !self.is_running() {}
         self.reload();
+        self.uio_acc.set_irq_enable(true).unwrap();
+        Ok(())
     }
-
-    pub fn write_frame(&self) {
-        unimplemented!();
-    }
-
-    fn get_desired_frame(&self) -> u32 {
+    pub fn write_frame<V>(&mut self, frame: *const V) -> Result<()> {
+        ensure!(self.frame_buffers < 16, "self.frame_buffers > 15");
+        while unsafe { self.uio_acc.read_mem32(MM2S_DMASR) & 0x1000 == 0 } {
+            self.uio_acc.wait_irq().unwrap();
+        }
         unsafe {
-            self.uio_acc.read_mem32(PARK_PTR_REG) & 0x1F
+            self.uio_acc.write_mem32(MM2S_DMASR, 0x1000);
+        }
+        self.inc_desired_frame();
+        self.write_frame_internal(frame);
+        self.reload();
+        self.write_desired_frame();
+        println!("{}", self.desired_frame);
+        Ok(())
+    }
+    fn write_frame_internal<V>(&mut self, frame: *const V) {
+        let count = if core::mem::size_of::<V>() == 1 {
+            (self.frame_width * self.frame_height * self.bytes_per_pix) as usize
+        } else {
+            1
+        };
+        unsafe {
+            self.udmabuf_acc[self.desired_frame].copy_from(frame, 0, count);
         }
     }
 
-    fn set_desired_frame(&self, frame_num: u32) {
-        let mut reg = unsafe {
-            self.uio_acc.read_mem32(PARK_PTR_REG)
-        };
-        reg &=  !0x1F;
-        reg |=  frame_num;
+    pub fn read_desired_frame(&self) -> u32 {
+        unsafe { self.uio_acc.read_mem32(PARK_PTR_REG) & 0x1F }
+    }
+    pub fn read_active_frame(&self) -> u32 {
+        unsafe { (self.uio_acc.read_mem32(PARK_PTR_REG) >> 16) & 0x1F }
+    }
+
+    fn write_desired_frame(&self) {
+        let mut reg = unsafe { self.uio_acc.read_mem32(PARK_PTR_REG) };
+        reg &= !0x1F;
+        reg |= self.desired_frame as u32;
         unsafe {
             self.uio_acc.write_mem32(PARK_PTR_REG, reg);
         }
+    }
+    fn inc_desired_frame(&mut self) {
+        self.desired_frame = (self.read_desired_frame() as usize + 1) % self.frame_buffers;
     }
 }
