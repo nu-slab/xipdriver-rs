@@ -1,10 +1,7 @@
-use crate::{hwh_parser, mem};
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Result, Context, bail};
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
-
-const BIND_TO: [&str; 1] = ["xilinx.com:ip:v_proc_ss:2.3"];
 
 macro_rules! float2sfix3_12 {
     ($float_num: expr) => {
@@ -19,8 +16,7 @@ macro_rules! sfix2f32 {
 }
 
 pub struct VideoProcSubsystemCsc {
-    pub hwh: hwh_parser::Ip,
-    uio_acc: mem::UioAccessor<usize>,
+    uio_acc: UioAccessor<usize>,
     pub frame_width: u32,
     pub frame_height: u32,
     fmt_in: u32,
@@ -41,20 +37,34 @@ pub struct VideoProcSubsystemCsc {
 }
 
 impl VideoProcSubsystemCsc {
-    pub fn new(hwh: &hwh_parser::Ip, uio_name: &str) -> Result<Self> {
+    pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
+        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
+        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
+        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
+        let library = hw_object["library"].as_str().context("library is not string")?;
+        let name = hw_object["name"].as_str().context("name is not string")?;
+        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
         ensure!(
-            BIND_TO.iter().any(|e| e == &hwh.vlnv),
-            "VideoProcSubsystemCsc::new(): This IP is not supported. ({})",
-            hwh.vlnv
+            vendor == "xilinx.com" &&
+            library == "ip" &&
+            name == "v_proc_ss",
+            "VideoFrameBufRead::new(): This IP is not supported. ({})",
+            name
         );
-        let uio = mem::new(uio_name)?;
+        let uio = match UioAccessor::<usize>::new_with_name(uio_name) {
+            Ok(uio_acc) => {
+                uio_acc
+            },
+            Err(e) => {
+                bail!("UioAccessor: {}", e)
+            }
+        };
         let mut csc_mat = vec![0.0; 9];
         csc_mat[0] = 1.;
         csc_mat[4] = 1.;
         csc_mat[8] = 1.;
 
         Ok(VideoProcSubsystemCsc {
-            hwh: hwh.clone(),
             uio_acc: uio,
             frame_width: 1280,
             frame_height: 720,

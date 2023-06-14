@@ -1,7 +1,6 @@
 #![allow(unused)]
 
-use crate::{hwh_parser, mem};
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Result, Context, bail};
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
@@ -9,21 +8,34 @@ use jelly_mem_access::*;
 const BIND_TO: [&str; 1] = ["xilinx.com:ip:axi_gpio:2.0"];
 
 pub struct AxiGpio {
-    pub hwh: hwh_parser::Ip,
-    uio_acc: mem::UioAccessor<usize>,
+    uio_acc: UioAccessor<usize>,
     bitw: [u64; 2],
 }
 
 impl AxiGpio {
-    pub fn new(hwh: &hwh_parser::Ip, uio_name: &str) -> Result<Self> {
+    pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
+        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
+        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
+        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
+        let library = hw_object["library"].as_str().context("library is not string")?;
+        let name = hw_object["name"].as_str().context("name is not string")?;
+        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
         ensure!(
-            BIND_TO.iter().any(|e| e == &hwh.vlnv),
-            "AxiGpio::new(): This IP is not supported. ({})",
-            hwh.vlnv
+            vendor == "xilinx.com" &&
+            library == "ip" &&
+            name == "axi_gpio",
+            "VideoFrameBufRead::new(): This IP is not supported. ({})",
+            name
         );
-        let uio = mem::new(uio_name)?;
+        let uio = match UioAccessor::<usize>::new_with_name(uio_name) {
+            Ok(uio_acc) => {
+                uio_acc
+            },
+            Err(e) => {
+                bail!("UioAccessor: {}", e)
+            }
+        };
         Ok(AxiGpio {
-            hwh: hwh.clone(),
             uio_acc: uio,
             bitw: [32, 32],
         })

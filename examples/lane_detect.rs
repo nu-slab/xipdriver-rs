@@ -1,29 +1,17 @@
 use imageproc::drawing;
 use image::Pixel;
 
+use xipdriver_rs::umv_lane_detector::UmvLaneDetector;
+use xipdriver_rs::v_frmbuf::{VideoFrameBufRead, VideoFrameBufWrite};
+
 fn main() {
-    let map = xipdriver_rs::hwh_parser::parse("fc_design.hwh").unwrap();
+    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json").unwrap();
 
-    let ld = xipdriver_rs::umv_lane_detector::UmvLaneDetector::new(
-        &map["/umv_lane_detector_0"],
-        "umv_lane_detector",
-        "udmabuf_umv_ld",
-    )
-    .unwrap();
+    let mut ld = UmvLaneDetector::new(&hw_json["/umv_lane_detector_0"]).unwrap();
 
-    let mut vfb_r = xipdriver_rs::v_frmbuf::VideoFrameBufRead::new(
-        &map["/v_frmbuf_rd_0"],
-        "v_frmbuf_rd",
-        "udmabuf_vfbr",
-    )
-    .unwrap();
+    let mut vfb_r = VideoFrameBufRead::new(&hw_json["/v_frmbuf_rd_0"]).unwrap();
 
-    let mut vfb_w = xipdriver_rs::v_frmbuf::VideoFrameBufWrite::new(
-        &map["/v_frmbuf_wr_0"],
-        "v_frmbuf_wr",
-        "udmabuf_vfbw",
-    )
-    .unwrap();
+    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"]).unwrap();
 
     let frame_width = 1280;
     let frame_height = 720;
@@ -38,6 +26,7 @@ fn main() {
     vfb_w.frame_height = frame_height;
     vfb_w.set_format("RGB8");
 
+    ld.bin_filter_thresh = 0;
     ld.configure_all().unwrap();
 
     // start IP

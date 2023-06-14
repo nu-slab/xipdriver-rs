@@ -3,15 +3,13 @@ use xipdriver_rs::v_proc_ss::VideoProcSubsystemCsc;
 use std::time::Instant;
 
 fn main() {
-    let map = xipdriver_rs::hwh_parser::parse("fc_design.hwh").unwrap();
+    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json").unwrap();
 
-    let mut vfb_r =
-        VideoFrameBufRead::new(&map["/v_frmbuf_rd_0"], "v_frmbuf_rd", "udmabuf_vfbr").unwrap();
+    let mut vfb_r = VideoFrameBufRead::new(&hw_json["/v_frmbuf_rd_0"]).unwrap();
 
-    let mut vpss_csc = VideoProcSubsystemCsc::new(&map["/v_proc_ss_0"], "v_proc_ss").unwrap();
+    let mut vpss_csc = VideoProcSubsystemCsc::new(&hw_json["/v_proc_ss_0"]).unwrap();
 
-    let mut vfb_w =
-        VideoFrameBufWrite::new(&map["/v_frmbuf_wr_0"], "v_frmbuf_wr", "udmabuf_vfbw").unwrap();
+    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"]).unwrap();
 
     let frame_width = 1280;
     let frame_height = 720;

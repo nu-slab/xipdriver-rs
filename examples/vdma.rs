@@ -1,17 +1,13 @@
 use xipdriver_rs::v_frmbuf::VideoFrameBufWrite;
 use xipdriver_rs::vdma::AxiVdmaMM2S;
-use xipdriver_rs::hwh_parser;
 use std::{thread, time};
 
 fn main() {
-    let map = hwh_parser::parse("fc_design.hwh").unwrap();
+    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json").unwrap();
 
-    let vdma_udma_names = vec!["udmabuf_vdma1", "udmabuf_vdma2", "udmabuf_vdma3"];
+    let mut vdma = AxiVdmaMM2S::new(&hw_json["/axi_vdma_0"]).unwrap();
 
-    let mut vdma = AxiVdmaMM2S::new(&map["/axi_vdma_0"], "dma", &vdma_udma_names).unwrap();
-
-    let mut vfb_w =
-        VideoFrameBufWrite::new(&map["/v_frmbuf_wr_0"], "v_frmbuf_wr", "udmabuf_vfbw").unwrap();
+    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"]).unwrap();
 
     let frame_width = 1280;
     let frame_height = 720;

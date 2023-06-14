@@ -1,5 +1,4 @@
-use crate::{hwh_parser, mem};
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Result, Context, bail};
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
@@ -35,11 +34,11 @@ impl std::fmt::Display for LanePoint {
 
 
 pub struct UmvLaneDetector {
-    pub hwh: hwh_parser::Ip,
-    uio_acc: mem::UioAccessor<usize>,
-    udmabuf_acc: mem::UdmabufAccessor<usize>,
-    pub image_width: u32,
-    pub image_height: u32,
+    uio_acc: UioAccessor<usize>,
+    udmabuf_acc: UdmabufAccessor<usize>,
+    image_width: u32,
+    image_height: u32,
+    max_detect_lines: u32,
     pub filter_type: u32,
     pub bin_filter_thresh:  u32,
     pub edge_filter_thresh: u32,
@@ -52,21 +51,46 @@ pub struct UmvLaneDetector {
 }
 
 impl UmvLaneDetector {
-    pub fn new(hwh: &hwh_parser::Ip, uio_name: &str, udmabuf_name: &str) -> Result<Self> {
-        let bind_to: [&str; 1] = ["slab:umv_project:umv_lane_detector:0.0"];
+    pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
+        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
+        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
+        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
+        let library = hw_object["library"].as_str().context("library is not string")?;
+        let name = hw_object["name"].as_str().context("name is not string")?;
+        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
+        let udmabuf_name = hw_object["udmabuf"][0].as_str().context("udmabuf_name is not string")?;
+        let width = hw_params["VID_H_ACTIVE"].as_str().context("VID_H_ACTIVE is not string")?.parse().context("Cannot convert VID_H_ACTIVE to numeric")?;
+        let height = hw_params["VID_V_ACTIVE"].as_str().context("VID_V_ACTIVE is not string")?.parse().context("Cannot convert VID_V_ACTIVE to numeric")?;
+        let max_detect_lines = hw_params["MAX_DETECT_LINES"].as_str().context("MAX_DETECT_LINES is not string")?.parse().context("Cannot convert MAX_DETECT_LINES to numeric")?;
         ensure!(
-            bind_to.iter().any(|e| e == &hwh.vlnv),
+            vendor == "slab" &&
+            library == "umv_project" &&
+            name == "umv_lane_detector",
             "UmvLaneDetector::new(): This IP is not supported. ({})",
-            hwh.vlnv
+            name
         );
-        let uio = mem::new(uio_name)?;
-        let udmabuf = UdmabufAccessor::new(udmabuf_name, false).unwrap();
+        let uio = match UioAccessor::<usize>::new_with_name(uio_name) {
+            Ok(uio_acc) => {
+                uio_acc
+            },
+            Err(e) => {
+                bail!("UioAccessor: {}", e)
+            }
+        };
+        let udmabuf = match UdmabufAccessor::new(udmabuf_name, false) {
+            Ok(udmabuf_acc) => {
+                udmabuf_acc
+            },
+            Err(e) => {
+                bail!("UdmabufAccessor: {}", e)
+            }
+        };
         Ok(UmvLaneDetector {
-            hwh: hwh.clone(),
             uio_acc: uio,
             udmabuf_acc: udmabuf,
-            image_width: 1280,
-            image_height: 720,
+            image_width: width,
+            image_height: height,
+            max_detect_lines: max_detect_lines,
             filter_type: 1,
             bin_filter_thresh: 120,
             edge_filter_thresh: 85,

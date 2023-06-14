@@ -1,14 +1,16 @@
-use crate::{hwh_parser, mem};
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Result, Context, bail};
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
 pub struct VideoFrameBufRead {
-    pub hwh: hwh_parser::Ip,
-    uio_acc: mem::UioAccessor<usize>,
-    udmabuf_acc: mem::UdmabufAccessor<usize>,
+    uio_acc: UioAccessor<usize>,
+    udmabuf_acc: UdmabufAccessor<usize>,
     fmt_id: u32,
+    max_width: u32,
+    max_height: u32,
+    has_rgb8: bool,
+    has_yuyv8: bool,
     pub frame_width: u32,
     pub frame_height: u32,
     pub pix_per_clk: u32,
@@ -16,20 +18,49 @@ pub struct VideoFrameBufRead {
 }
 
 impl VideoFrameBufRead {
-    pub fn new(hwh: &hwh_parser::Ip, uio_name: &str, udmabuf_name: &str) -> Result<Self> {
-        let bind_to: [&str; 1] = ["xilinx.com:ip:v_frmbuf_rd:2.4"];
+    pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
+        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
+        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
+        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
+        let library = hw_object["library"].as_str().context("library is not string")?;
+        let name = hw_object["name"].as_str().context("name is not string")?;
+        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
+        let udmabuf_name = hw_object["udmabuf"][0].as_str().context("udmabuf_name is not string")?;
+        let max_width: u32 = hw_params["MAX_COLS"].as_str().context("MAX_COLS is not string")?.parse().context("Cannot convert MAX_COLS to numeric")?;
+        let max_height: u32 = hw_params["MAX_ROWS"].as_str().context("MAX_ROWS is not string")?.parse().context("Cannot convert MAX_ROWS to numeric")?;
+        let has_rgb8 = hw_params["HAS_RGB8"].as_str().context("HAS_RGB8 is not string")? == "1";
+        let has_yuyv8 = hw_params["HAS_YUYV8"].as_str().context("HAS_YUYV8 is not string")? == "1";
         ensure!(
-            bind_to.iter().any(|e| e == &hwh.vlnv),
+            vendor == "xilinx.com" &&
+            library == "ip" &&
+            name == "v_frmbuf_rd",
             "VideoFrameBufRead::new(): This IP is not supported. ({})",
-            hwh.vlnv
+            name
         );
-        let uio = mem::new(uio_name)?;
-        let udmabuf = UdmabufAccessor::new(udmabuf_name, false).unwrap();
+        let uio = match UioAccessor::<usize>::new_with_name(uio_name) {
+            Ok(uio_acc) => {
+                uio_acc
+            },
+            Err(e) => {
+                bail!("UioAccessor: {}", e)
+            }
+        };
+        let udmabuf = match UdmabufAccessor::new(udmabuf_name, false) {
+            Ok(udmabuf_acc) => {
+                udmabuf_acc
+            },
+            Err(e) => {
+                bail!("UdmabufAccessor: {}", e)
+            }
+        };
         Ok(VideoFrameBufRead {
-            hwh: hwh.clone(),
             uio_acc: uio,
             udmabuf_acc: udmabuf,
             fmt_id: 12,
+            max_width: max_width,
+            max_height: max_height,
+            has_rgb8: has_rgb8,
+            has_yuyv8: has_yuyv8,
             frame_height: 1280,
             frame_width: 720,
             pix_per_clk: 1,
@@ -149,10 +180,13 @@ impl VideoFrameBufRead {
 }
 
 pub struct VideoFrameBufWrite {
-    pub hwh: hwh_parser::Ip,
-    uio_acc: mem::UioAccessor<usize>,
-    udmabuf_acc: mem::UdmabufAccessor<usize>,
+    uio_acc: UioAccessor<usize>,
+    udmabuf_acc: UdmabufAccessor<usize>,
     fmt_id: u32,
+    max_width: u32,
+    max_height: u32,
+    has_rgb8: bool,
+    has_yuyv8: bool,
     pub frame_width: u32,
     pub frame_height: u32,
     pub pix_per_clk: u32,
@@ -160,22 +194,51 @@ pub struct VideoFrameBufWrite {
 }
 
 impl VideoFrameBufWrite {
-    pub fn new(hwh: &hwh_parser::Ip, uio_name: &str, udmabuf_name: &str) -> Result<Self> {
-        let bind_to: [&str; 1] = ["xilinx.com:ip:v_frmbuf_wr:2.4"];
+    pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
+        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
+        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
+        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
+        let library = hw_object["library"].as_str().context("library is not string")?;
+        let name = hw_object["name"].as_str().context("name is not string")?;
+        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
+        let udmabuf_name = hw_object["udmabuf"][0].as_str().context("udmabuf_name is not string")?;
+        let max_width: u32 = hw_params["MAX_COLS"].as_str().context("MAX_COLS is not string")?.parse().context("Cannot convert MAX_COLS to numeric")?;
+        let max_height: u32 = hw_params["MAX_ROWS"].as_str().context("MAX_ROWS is not string")?.parse().context("Cannot convert MAX_ROWS to numeric")?;
+        let has_rgb8 = hw_params["HAS_RGB8"].as_str().context("HAS_RGB8 is not string")? == "1";
+        let has_yuyv8 = hw_params["HAS_YUYV8"].as_str().context("HAS_YUYV8 is not string")? == "1";
         ensure!(
-            bind_to.iter().any(|e| e == &hwh.vlnv),
-            "VideoFrameBufRead::new(): This IP is not supported. ({})",
-            hwh.vlnv
+            vendor == "xilinx.com" &&
+            library == "ip" &&
+            name == "v_frmbuf_wr",
+            "VideoFrameBufWrite::new(): This IP is not supported. ({})",
+            name
         );
-        let uio = mem::new(uio_name)?;
-        let udmabuf = UdmabufAccessor::new(udmabuf_name, false).unwrap();
+        let uio = match UioAccessor::<usize>::new_with_name(uio_name) {
+            Ok(uio_acc) => {
+                uio_acc
+            },
+            Err(e) => {
+                bail!("UioAccessor: {}", e)
+            }
+        };
+        let udmabuf = match UdmabufAccessor::new(udmabuf_name, false) {
+            Ok(udmabuf_acc) => {
+                udmabuf_acc
+            },
+            Err(e) => {
+                bail!("UdmabufAccessor: {}", e)
+            }
+        };
         Ok(VideoFrameBufWrite {
-            hwh: hwh.clone(),
             uio_acc: uio,
             udmabuf_acc: udmabuf,
             fmt_id: 12,
-            frame_height: 1280,
-            frame_width: 720,
+            max_width: max_width,
+            max_height: max_height,
+            has_rgb8: has_rgb8,
+            has_yuyv8: has_yuyv8,
+            frame_height: max_width,
+            frame_width: max_height,
             pix_per_clk: 1,
             bytes_per_pix: 2,
         })
