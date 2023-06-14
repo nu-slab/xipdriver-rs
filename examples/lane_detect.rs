@@ -4,7 +4,7 @@ use image::Pixel;
 fn main() {
     let map = xipdriver_rs::hwh_parser::parse("fc_design.hwh").unwrap();
 
-    let mut ld = xipdriver_rs::umv_lane_detector::UmvLaneDetector::new(
+    let ld = xipdriver_rs::umv_lane_detector::UmvLaneDetector::new(
         &map["/umv_lane_detector_0"],
         "umv_lane_detector",
         "udmabuf_umv_ld",
@@ -38,7 +38,6 @@ fn main() {
     vfb_w.frame_height = frame_height;
     vfb_w.set_format("RGB8");
 
-    ld.video_mode = 4;
     ld.configure_all().unwrap();
 
     // start IP
