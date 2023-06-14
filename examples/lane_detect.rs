@@ -1,5 +1,5 @@
-
-use std::{thread, time};
+use imageproc::drawing;
+use image::Pixel;
 
 fn main() {
     let map = xipdriver_rs::hwh_parser::parse("fc_design.hwh").unwrap();
@@ -38,7 +38,7 @@ fn main() {
     vfb_w.frame_height = frame_height;
     vfb_w.set_format("RGB8");
 
-    ld.video_mode = 0;
+    ld.video_mode = 4;
     ld.configure_all().unwrap();
 
     // start IP
@@ -51,16 +51,20 @@ fn main() {
     let frame = img_rgb.to_vec();
     println!("write frame");
     vfb_r.write_frame(frame.as_ptr());
-    thread::sleep(time::Duration::from_millis(100));
 
     println!("Lane detection");
     ld.start().unwrap();
     let points = ld.read_data();
+
+    let mut rgb_frame = vfb_w.read_frame_as_image();
     for p in points.iter() {
         println!("{}", p);
+        let color = if p.direction == 1 { [255, 0, 0] } else { [0, 255, 0] };
+        drawing::draw_filled_circle_mut(&mut rgb_frame, (p.x as i32, p.y as i32), 3, *image::Rgb::from_slice(&color));
     }
-
-    let rgb_frame = vfb_w.read_frame_as_image();
     rgb_frame.save("out.bmp").unwrap();
+
+    vfb_r.stop();
+    vfb_w.stop();
 
 }
