@@ -26,7 +26,6 @@ fn main() {
     vfb_w.frame_height = frame_height;
     vfb_w.set_format("RGB8");
 
-    ld.bin_filter_thresh = 0;
     ld.configure_all().unwrap();
 
     // start IP
