@@ -18,6 +18,8 @@ const MEM_BASE_ADDR:usize             = 0x28;
 const MEM_SIZE:usize                  = 0x2C;
 const FINDLINES_DETECT_COUNT:usize    = 0x30;
 const VID_MODE:usize                  = 0x34;
+const FL_HLINE_DIN_MASK:usize         = 0x38;
+const FL_VLINE_DIN_MASK:usize         = 0x3C;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LanePoint {
@@ -48,6 +50,8 @@ pub struct UmvLaneDetector {
     pub fl_thresh: u32,
     pub fl_detect_interval: u32,
     pub video_mode: u32,
+    pub fl_hline_din_mask: u32,
+    pub fl_vline_din_mask: u32,
 }
 
 impl UmvLaneDetector {
@@ -59,8 +63,8 @@ impl UmvLaneDetector {
         let name = hw_object["name"].as_str().context("name is not string")?;
         let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
         let udmabuf_name = hw_object["udmabuf"][0].as_str().context("udmabuf_name is not string")?;
-        let width = hw_params["VID_H_ACTIVE"].as_str().context("VID_H_ACTIVE is not string")?.parse().context("Cannot convert VID_H_ACTIVE to numeric")?;
-        let height = hw_params["VID_V_ACTIVE"].as_str().context("VID_V_ACTIVE is not string")?.parse().context("Cannot convert VID_V_ACTIVE to numeric")?;
+        let image_width = hw_params["IMAGE_WIDTH"].as_str().context("IMAGE_WIDTH is not string")?.parse().context("Cannot convert IMAGE_WIDTH to numeric")?;
+        let image_height = hw_params["IMAGE_HEIGHT"].as_str().context("IMAGE_HEIGHT is not string")?.parse().context("Cannot convert IMAGE_HEIGHT to numeric")?;
         let max_detect_lines = hw_params["MAX_DETECT_LINES"].as_str().context("MAX_DETECT_LINES is not string")?.parse().context("Cannot convert MAX_DETECT_LINES to numeric")?;
         ensure!(
             vendor == "slab" &&
@@ -88,9 +92,9 @@ impl UmvLaneDetector {
         Ok(UmvLaneDetector {
             uio_acc: uio,
             udmabuf_acc: udmabuf,
-            image_width: width,
-            image_height: height,
-            max_detect_lines: max_detect_lines,
+            image_width,
+            image_height,
+            max_detect_lines,
             filter_type: 1,
             bin_filter_thresh: 120,
             edge_filter_thresh: 85,
@@ -100,6 +104,8 @@ impl UmvLaneDetector {
             fl_thresh: 20,
             fl_detect_interval: 6,
             video_mode: 0,
+            fl_hline_din_mask: 0b0001,
+            fl_vline_din_mask: 0b1110,
         })
     }
     pub fn get_status(&self) -> u32 {
@@ -135,12 +141,13 @@ impl UmvLaneDetector {
             self.uio_acc
                 .write_mem32(MEM_BASE_ADDR, self.udmabuf_acc.phys_addr() as u32);
             self.uio_acc
-                .write_mem32(MEM_SIZE, self.udmabuf_acc.size() as u32);
+                .write_mem32(MEM_SIZE, (self.udmabuf_acc.size() / 4) as u32);
         }
     }
     pub fn read_data(&self) -> Vec<LanePoint> {
         self.stop();
-        let data_num = unsafe { self.uio_acc.read_mem32(FINDLINES_DETECT_COUNT) } as usize;
+        let detect_cnt = unsafe { self.uio_acc.read_mem32(FINDLINES_DETECT_COUNT) } as usize;
+        let data_num = detect_cnt.min(self.udmabuf_acc.size() / 4);
         println!("data_num: {}", data_num);
         let mut buf = Vec::with_capacity(data_num);
         for i in 0..data_num {
@@ -164,6 +171,8 @@ impl UmvLaneDetector {
         self.write_fl_thresh();
         self.write_fl_detect_interval();
         self.write_vid_mode();
+        self.write_fl_hline_din_mask();
+        self.write_fl_vline_din_mask();
         self.write_framebuf_addr();
         Ok(())
     }
@@ -217,6 +226,32 @@ impl UmvLaneDetector {
     pub fn write_vid_mode(&self) {
         unsafe {
             self.uio_acc.write_mem32(VID_MODE, self.video_mode);
+        }
+    }
+    pub fn write_fl_hline_din_mask(&self) {
+        unsafe {
+            self.uio_acc.write_mem32(FL_HLINE_DIN_MASK, self.fl_hline_din_mask);
+        }
+    }
+    pub fn write_fl_vline_din_mask(&self) {
+        unsafe {
+            self.uio_acc.write_mem32(FL_VLINE_DIN_MASK, self.fl_vline_din_mask);
+        }
+    }
+    pub fn read_params(&mut self) {
+        unsafe {
+            self.filter_type        = self.uio_acc.read_mem32(FILTER_TYPE);
+            self.bin_filter_thresh  = self.uio_acc.read_mem32(BIN_FILTER_THRESH);
+            self.edge_filter_thresh = self.uio_acc.read_mem32(EDGE_FILTER_THRESH);
+            self.edge_select_thresh = self.uio_acc.read_mem32(EDGE_SELECT_THRESH);
+            let fl_width_interval = self.uio_acc.read_mem32(FINDLINES_LINE_WIDTH_INTERVAL);
+            self.fl_width_min = self.uio_acc.read_mem32(FINDLINES_LINE_WIDTH_MIN);
+            self.fl_width_max = (self.image_height / fl_width_interval) + self.fl_width_min - 1;
+            self.fl_thresh = self.uio_acc.read_mem32(FINDLINES_THRESH);
+            self.fl_detect_interval = self.uio_acc.read_mem32(FINDLINES_DETECT_INTERVAL);
+            self.video_mode = self.uio_acc.read_mem32(VID_MODE);
+            self.fl_hline_din_mask = self.uio_acc.read_mem32(FL_HLINE_DIN_MASK);
+            self.fl_vline_din_mask = self.uio_acc.read_mem32(FL_VLINE_DIN_MASK);
         }
     }
 

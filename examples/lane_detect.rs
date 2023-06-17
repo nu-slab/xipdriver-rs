@@ -3,6 +3,7 @@ use image::Pixel;
 
 use xipdriver_rs::umv_lane_detector::UmvLaneDetector;
 use xipdriver_rs::v_frmbuf::{VideoFrameBufRead, VideoFrameBufWrite};
+use std::{thread, time};
 
 fn main() {
     let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json").unwrap();
@@ -36,20 +37,26 @@ fn main() {
     let img = image::open("examples/road.png").unwrap();
     let img_rgb = img.to_rgb8();
     let frame = img_rgb.to_vec();
-    println!("write frame");
-    vfb_r.write_frame(frame.as_ptr());
 
-    println!("Lane detection");
-    ld.start().unwrap();
-    let points = ld.read_data();
+    for i in 0..9 {
+        ld.video_mode = i;
+        ld.configure_all().unwrap();
 
-    let mut rgb_frame = vfb_w.read_frame_as_image();
-    for p in points.iter() {
-        println!("{}", p);
-        let color = if p.direction == 1 { [255, 0, 0] } else { [0, 255, 0] };
-        drawing::draw_filled_circle_mut(&mut rgb_frame, (p.x as i32, p.y as i32), 3, *image::Rgb::from_slice(&color));
+        println!("write frame: {}", i);
+        vfb_r.write_frame(frame.as_ptr());
+        thread::sleep(time::Duration::from_micros(300));
+        println!("Lane detection");
+        ld.start().unwrap();
+        let points = ld.read_data();
+
+        let mut rgb_frame = vfb_w.read_frame_as_image();
+        for p in points.iter() {
+            // println!("{}", p);
+            let color = if p.direction == 1 { [255, 0, 0] } else { [0, 255, 0] };
+            drawing::draw_filled_circle_mut(&mut rgb_frame, (p.x as i32, p.y as i32), 3, *image::Rgb::from_slice(&color));
+        }
+        rgb_frame.save(format!("out{}.bmp", i)).unwrap();
     }
-    rgb_frame.save("out.bmp").unwrap();
 
     vfb_r.stop();
     vfb_w.stop();
