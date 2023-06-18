@@ -3,6 +3,9 @@ use anyhow::{ensure, Result, Context, bail};
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
+use crate::json_as_map;
+use crate::json_as_str;
+
 macro_rules! float2sfix3_12 {
     ($float_num: expr) => {
         (($float_num * 4096.).round() as i32)
@@ -38,12 +41,12 @@ pub struct VideoProcSubsystemCsc {
 
 impl VideoProcSubsystemCsc {
     pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
-        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
-        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
-        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
-        let library = hw_object["library"].as_str().context("library is not string")?;
-        let name = hw_object["name"].as_str().context("name is not string")?;
-        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
+        let hw_object = json_as_map!(hw_info);
+        // let hw_params = json_as_map!(hw_object["params"]);
+        let vendor = json_as_str!(hw_object["vendor"]);
+        let library = json_as_str!(hw_object["library"]);
+        let name = json_as_str!(hw_object["name"]);
+        let uio_name = json_as_str!(hw_object["uio"]);
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&

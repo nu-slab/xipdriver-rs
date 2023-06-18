@@ -5,6 +5,11 @@ use anyhow::{ensure, Result, Context, bail};
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
+
+use crate::json_as_map;
+use crate::json_as_vec;
+use crate::json_as_str;
+
 const MM2S_DMACR: usize = 0x00;
 const MM2S_DMASR: usize = 0x04;
 const MM2S_FRMSTORE: usize = 0x18;
@@ -50,18 +55,18 @@ pub struct AxiVdmaMM2S {
 
 impl AxiVdmaMM2S {
     pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
-        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
-        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
-        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
-        let library = hw_object["library"].as_str().context("library is not string")?;
-        let name = hw_object["name"].as_str().context("name is not string")?;
-        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
-        let udmabuf_names = hw_object["udmabuf"].as_array().context("udmabuf is not array")?;
+        let hw_object = json_as_map!(hw_info);
+        // let hw_params = json_as_map!(hw_object["params"]);
+        let vendor = json_as_str!(hw_object["vendor"]);
+        let library = json_as_str!(hw_object["library"]);
+        let name = json_as_str!(hw_object["name"]);
+        let uio_name = json_as_str!(hw_object["uio"]);
+        let udmabuf_names = json_as_vec!(hw_object["udmabuf"]);
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&
             name == "axi_vdma",
-            "VideoFrameBufWrite::new(): This IP is not supported. ({})",
+            "AxiVdmaMM2S::new(): This IP is not supported. ({})",
             name
         );
         let uio = match UioAccessor::<usize>::new_with_name(uio_name) {

@@ -3,6 +3,10 @@ use anyhow::{ensure, Result, Context, bail};
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
+use crate::json_as_map;
+use crate::json_as_str;
+use crate::json_as_u32;
+
 pub struct VideoFrameBufRead {
     uio_acc: UioAccessor<usize>,
     udmabuf_acc: UdmabufAccessor<usize>,
@@ -19,17 +23,17 @@ pub struct VideoFrameBufRead {
 
 impl VideoFrameBufRead {
     pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
-        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
-        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
-        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
-        let library = hw_object["library"].as_str().context("library is not string")?;
-        let name = hw_object["name"].as_str().context("name is not string")?;
-        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
-        let udmabuf_name = hw_object["udmabuf"][0].as_str().context("udmabuf_name is not string")?;
-        let max_width: u32 = hw_params["MAX_COLS"].as_str().context("MAX_COLS is not string")?.parse().context("Cannot convert MAX_COLS to numeric")?;
-        let max_height: u32 = hw_params["MAX_ROWS"].as_str().context("MAX_ROWS is not string")?.parse().context("Cannot convert MAX_ROWS to numeric")?;
-        let has_rgb8 = hw_params["HAS_RGB8"].as_str().context("HAS_RGB8 is not string")? == "1";
-        let has_yuyv8 = hw_params["HAS_YUYV8"].as_str().context("HAS_YUYV8 is not string")? == "1";
+        let hw_object = json_as_map!(hw_info);
+        let hw_params = json_as_map!(hw_object["params"]);
+        let vendor = json_as_str!(hw_object["vendor"]);
+        let library = json_as_str!(hw_object["library"]);
+        let name = json_as_str!(hw_object["name"]);
+        let uio_name = json_as_str!(hw_object["uio"]);
+        let udmabuf_name = json_as_str!(hw_object["udmabuf"][0]);
+        let max_width: u32 = json_as_u32!(hw_params["MAX_COLS"]);
+        let max_height: u32 = json_as_u32!(hw_params["MAX_ROWS"]);
+        let has_rgb8 = json_as_u32!(hw_params["HAS_RGB8"]) == 1;
+        let has_yuyv8 = json_as_u32!(hw_params["HAS_YUYV8"]) == 1;
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&
@@ -57,10 +61,10 @@ impl VideoFrameBufRead {
             uio_acc: uio,
             udmabuf_acc: udmabuf,
             fmt_id: 12,
-            max_width: max_width,
-            max_height: max_height,
-            has_rgb8: has_rgb8,
-            has_yuyv8: has_yuyv8,
+            max_width,
+            max_height,
+            has_rgb8,
+            has_yuyv8,
             frame_height: 1280,
             frame_width: 720,
             pix_per_clk: 1,
@@ -195,17 +199,17 @@ pub struct VideoFrameBufWrite {
 
 impl VideoFrameBufWrite {
     pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
-        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
-        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
-        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
-        let library = hw_object["library"].as_str().context("library is not string")?;
-        let name = hw_object["name"].as_str().context("name is not string")?;
-        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
-        let udmabuf_name = hw_object["udmabuf"][0].as_str().context("udmabuf_name is not string")?;
-        let max_width: u32 = hw_params["MAX_COLS"].as_str().context("MAX_COLS is not string")?.parse().context("Cannot convert MAX_COLS to numeric")?;
-        let max_height: u32 = hw_params["MAX_ROWS"].as_str().context("MAX_ROWS is not string")?.parse().context("Cannot convert MAX_ROWS to numeric")?;
-        let has_rgb8 = hw_params["HAS_RGB8"].as_str().context("HAS_RGB8 is not string")? == "1";
-        let has_yuyv8 = hw_params["HAS_YUYV8"].as_str().context("HAS_YUYV8 is not string")? == "1";
+        let hw_object = json_as_map!(hw_info);
+        let hw_params = json_as_map!(hw_object["params"]);
+        let vendor = json_as_str!(hw_object["vendor"]);
+        let library = json_as_str!(hw_object["library"]);
+        let name = json_as_str!(hw_object["name"]);
+        let uio_name = json_as_str!(hw_object["uio"]);
+        let udmabuf_name = json_as_str!(hw_object["udmabuf"][0]);
+        let max_width = json_as_u32!(hw_params["MAX_COLS"]);
+        let max_height = json_as_u32!(hw_params["MAX_ROWS"]);
+        let has_rgb8 = json_as_u32!(hw_params["HAS_RGB8"]) == 1;
+        let has_yuyv8 = json_as_u32!(hw_params["HAS_YUYV8"]) == 1;
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&
@@ -233,10 +237,10 @@ impl VideoFrameBufWrite {
             uio_acc: uio,
             udmabuf_acc: udmabuf,
             fmt_id: 12,
-            max_width: max_width,
-            max_height: max_height,
-            has_rgb8: has_rgb8,
-            has_yuyv8: has_yuyv8,
+            max_width,
+            max_height,
+            has_rgb8,
+            has_yuyv8,
             frame_height: max_width,
             frame_width: max_height,
             pix_per_clk: 1,

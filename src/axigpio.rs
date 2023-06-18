@@ -5,7 +5,8 @@ use anyhow::{ensure, Result, Context, bail};
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
-const BIND_TO: [&str; 1] = ["xilinx.com:ip:axi_gpio:2.0"];
+use crate::json_as_map;
+use crate::json_as_str;
 
 pub struct AxiGpio {
     uio_acc: UioAccessor<usize>,
@@ -14,12 +15,12 @@ pub struct AxiGpio {
 
 impl AxiGpio {
     pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
-        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
-        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
-        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
-        let library = hw_object["library"].as_str().context("library is not string")?;
-        let name = hw_object["name"].as_str().context("name is not string")?;
-        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
+        let hw_object = json_as_map!(hw_info);
+        // let hw_params = json_as_map!(hw_object["params"]);
+        let vendor = json_as_str!(hw_object["vendor"]);
+        let library = json_as_str!(hw_object["library"]);
+        let name = json_as_str!(hw_object["name"]);
+        let uio_name = json_as_str!(hw_object["uio"]);
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&

@@ -3,6 +3,9 @@ use anyhow::{ensure, Result, Context, bail};
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
+use crate::json_as_map;
+use crate::json_as_str;
+use crate::json_as_u32;
 
 const FINDLINES_STATUS:usize          = 0x00;
 const FINDLINES_START:usize           = 0x04;
@@ -56,16 +59,17 @@ pub struct UmvLaneDetector {
 
 impl UmvLaneDetector {
     pub fn new(hw_info: &serde_json::Value) -> Result<Self> {
-        let hw_object = hw_info.as_object().context("hw_object is not an object type")?;
-        let hw_params = hw_object["params"].as_object().context("hw_params is not an object type")?;
-        let vendor = hw_object["vendor"].as_str().context("vendor is not string")?;
-        let library = hw_object["library"].as_str().context("library is not string")?;
-        let name = hw_object["name"].as_str().context("name is not string")?;
-        let uio_name = hw_object["uio"].as_str().context("uio_name is not string")?;
-        let udmabuf_name = hw_object["udmabuf"][0].as_str().context("udmabuf_name is not string")?;
-        let image_width = hw_params["IMAGE_WIDTH"].as_str().context("IMAGE_WIDTH is not string")?.parse().context("Cannot convert IMAGE_WIDTH to numeric")?;
-        let image_height = hw_params["IMAGE_HEIGHT"].as_str().context("IMAGE_HEIGHT is not string")?.parse().context("Cannot convert IMAGE_HEIGHT to numeric")?;
-        let max_detect_lines = hw_params["MAX_DETECT_LINES"].as_str().context("MAX_DETECT_LINES is not string")?.parse().context("Cannot convert MAX_DETECT_LINES to numeric")?;
+        let hw_object = json_as_map!(hw_info);
+        let hw_params = json_as_map!(hw_object["params"]);
+        let vendor = json_as_str!(hw_object["vendor"]);
+        let library = json_as_str!(hw_object["library"]);
+        let name = json_as_str!(hw_object["name"]);
+        let uio_name = json_as_str!(hw_object["uio"]);
+        let udmabuf_name = json_as_str!(hw_object["udmabuf"][0]);
+        let image_width = json_as_u32!(hw_params["IMAGE_WIDTH"]);
+        let image_height = json_as_u32!(hw_params["IMAGE_HEIGHT"]);
+        let max_detect_lines = json_as_u32!(hw_params["MAX_DETECT_LINES"]);
+        let filter_type = json_as_u32!(hw_params["FILTER_TYPE_DEFAULT"]);
         ensure!(
             vendor == "slab" &&
             library == "umv_project" &&
@@ -95,7 +99,7 @@ impl UmvLaneDetector {
             image_width,
             image_height,
             max_detect_lines,
-            filter_type: 1,
+            filter_type,
             bin_filter_thresh: 120,
             edge_filter_thresh: 85,
             edge_select_thresh: 3,
