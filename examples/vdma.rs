@@ -1,13 +1,14 @@
 use xipdriver_rs::v_frmbuf::VideoFrameBufWrite;
 use xipdriver_rs::vdma::AxiVdmaMM2S;
 use std::{thread, time};
+use anyhow::Result;
 
-fn main() {
-    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json").unwrap();
+fn main() -> Result<()> {
+    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json")?;
 
-    let mut vdma = AxiVdmaMM2S::new(&hw_json["/axi_vdma_0"]).unwrap();
+    let mut vdma = AxiVdmaMM2S::new(&hw_json["/axi_vdma_0"])?;
 
-    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"]).unwrap();
+    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"])?;
 
     let frame_width = 1280;
     let frame_height = 720;
@@ -21,22 +22,22 @@ fn main() {
     // v_frmbuf_write config
     vfb_w.frame_width = frame_width;
     vfb_w.frame_height = frame_height;
-    vfb_w.set_format("RGB8");
+    vfb_w.set_format("RGB8")?;
 
     // start IP
-    vfb_w.start();
+    vfb_w.start()?;
     println!("is_running: {}", vdma.is_running());
-    vdma.start().unwrap();
+    vdma.start()?;
     println!("is_running: {}", vdma.is_running());
 
     for i in 0..10 {
         let frame: Vec<u8> = vec![0xFF / 9 * (9 - i); (frame_width * frame_height * 3) as usize];
-        vdma.write_frame(frame.as_ptr()).unwrap();
+        vdma.write_frame(frame.as_ptr())?;
         let start = time::Instant::now();
-        let rgb_frame = vfb_w.read_frame_as_image();
+        let rgb_frame = vfb_w.read_frame_as_image()?;
         let end = start.elapsed();
         println!("{}秒経過しました。", end.as_secs_f32());
-        rgb_frame.save(format!("out{}.bmp", i)).unwrap();
+        rgb_frame.save(format!("out{}.bmp", i))?;
     }
 
     for _ in 0..100 {
@@ -46,4 +47,6 @@ fn main() {
 
     vdma.reset();
     vfb_w.stop();
+
+    Ok(())
 }

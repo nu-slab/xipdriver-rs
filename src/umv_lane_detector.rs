@@ -43,7 +43,7 @@ pub struct UmvLaneDetector {
     udmabuf_acc: UdmabufAccessor<usize>,
     image_width: u32,
     image_height: u32,
-    max_detect_lines: u32,
+    max_detect_interval: u32,
     pub filter_type: u32,
     pub bin_filter_thresh:  u32,
     pub edge_filter_thresh: u32,
@@ -69,6 +69,7 @@ impl UmvLaneDetector {
         let image_width = json_as_u32!(hw_params["IMAGE_WIDTH"]);
         let image_height = json_as_u32!(hw_params["IMAGE_HEIGHT"]);
         let max_detect_lines = json_as_u32!(hw_params["MAX_DETECT_LINES"]);
+        let max_detect_interval = (max_detect_lines as f32).log2() as u32;
         let filter_type = json_as_u32!(hw_params["FILTER_TYPE_DEFAULT"]);
         ensure!(
             vendor == "slab" &&
@@ -98,7 +99,7 @@ impl UmvLaneDetector {
             udmabuf_acc: udmabuf,
             image_width,
             image_height,
-            max_detect_lines,
+            max_detect_interval,
             filter_type,
             bin_filter_thresh: 120,
             edge_filter_thresh: 85,
@@ -152,7 +153,6 @@ impl UmvLaneDetector {
         self.stop();
         let detect_cnt = unsafe { self.uio_acc.read_mem32(FINDLINES_DETECT_COUNT) } as usize;
         let data_num = detect_cnt.min(self.udmabuf_acc.size() / 4);
-        println!("data_num: {}", data_num);
         let mut buf = Vec::with_capacity(data_num);
         for i in 0..data_num {
             let data = unsafe { self.udmabuf_acc.read_mem32(0x00 + 4 * i) };
@@ -223,8 +223,9 @@ impl UmvLaneDetector {
         }
     }
     pub fn write_fl_detect_interval(&self) {
+        let interval_min = self.fl_detect_interval.min(self.max_detect_interval);
         unsafe {
-            self.uio_acc.write_mem32(FINDLINES_DETECT_INTERVAL, self.fl_detect_interval);
+            self.uio_acc.write_mem32(FINDLINES_DETECT_INTERVAL, interval_min);
         }
     }
     pub fn write_vid_mode(&self) {
@@ -257,6 +258,13 @@ impl UmvLaneDetector {
             self.fl_hline_din_mask = self.uio_acc.read_mem32(FL_HLINE_DIN_MASK);
             self.fl_vline_din_mask = self.uio_acc.read_mem32(FL_VLINE_DIN_MASK);
         }
+    }
+    pub fn get_image_width(&self) -> u32 {
+        self.image_width
+    }
+
+    pub fn get_image_height(&self) -> u32 {
+        self.image_height
     }
 
 }

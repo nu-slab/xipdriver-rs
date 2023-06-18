@@ -1,15 +1,16 @@
 use xipdriver_rs::v_frmbuf::{VideoFrameBufRead, VideoFrameBufWrite};
 use xipdriver_rs::v_proc_ss::VideoProcSubsystemCsc;
 use std::time::Instant;
+use anyhow::Result;
 
-fn main() {
-    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json").unwrap();
+fn main() -> Result<()> {
+    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json")?;
 
-    let mut vfb_r = VideoFrameBufRead::new(&hw_json["/v_frmbuf_rd_0"]).unwrap();
+    let mut vfb_r = VideoFrameBufRead::new(&hw_json["/v_frmbuf_rd_0"])?;
 
-    let mut vpss_csc = VideoProcSubsystemCsc::new(&hw_json["/v_proc_ss_0"]).unwrap();
+    let mut vpss_csc = VideoProcSubsystemCsc::new(&hw_json["/v_proc_ss_0"])?;
 
-    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"]).unwrap();
+    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"])?;
 
     let frame_width = 1280;
     let frame_height = 720;
@@ -17,7 +18,7 @@ fn main() {
     // v_frmbuf_read config
     vfb_r.frame_width = frame_width;
     vfb_r.frame_height = frame_height;
-    vfb_r.set_format("YUYV");
+    vfb_r.set_format("YUYV")?;
 
     // v_proc_ss config
     vpss_csc.frame_width = frame_width;
@@ -27,11 +28,11 @@ fn main() {
     // v_frmbuf_write config
     vfb_w.frame_width = frame_width;
     vfb_w.frame_height = frame_height;
-    vfb_w.set_format("RGB8");
+    vfb_w.set_format("RGB8")?;
 
     // start IP
-    vpss_csc.start().unwrap();
-    vfb_w.start();
+    vpss_csc.start()?;
+    vfb_w.start()?;
 
     for k in vpss_csc.read_csc_matrix().iter() {
         print!("{} ", k);
@@ -46,13 +47,13 @@ fn main() {
 
         // Write to v_frmbuf_read
         let start = Instant::now();
-        vfb_r.write_frame(frame_yuyv.as_ptr());
+        vfb_r.write_frame(frame_yuyv.as_ptr())?;
         let end = start.elapsed();
         println!("Write: {} msec", end.as_secs_f32() * 1000.);
 
         // Read from v_frmbuf_write
         let start = Instant::now();
-        let rgb_frame = vfb_w.read_frame_as_image();
+        let rgb_frame = vfb_w.read_frame_as_image()?;
         let end = start.elapsed();
         println!("Read: {} msec", end.as_secs_f32() * 1000.);
 
@@ -71,7 +72,7 @@ fn main() {
     println!("Save frames");
     for i in 0..read_frames.len() {
         println!("Writing out{}.bmp...", i);
-        read_frames[i].save(format!("out{}.bmp", i)).unwrap();
+        read_frames[i].save(format!("out{}.bmp", i))?;
     }
 
     println!("Done!");
@@ -79,6 +80,8 @@ fn main() {
     vfb_r.stop();
     vpss_csc.stop();
     vfb_w.stop();
+
+    Ok(())
 }
 
 

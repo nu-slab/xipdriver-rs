@@ -17,7 +17,7 @@ pub struct VideoFrameBufRead {
     has_yuyv8: bool,
     pub frame_width: u32,
     pub frame_height: u32,
-    pub pix_per_clk: u32,
+    pix_per_clk: u32,
     bytes_per_pix: u32,
 }
 
@@ -34,6 +34,7 @@ impl VideoFrameBufRead {
         let max_height: u32 = json_as_u32!(hw_params["MAX_ROWS"]);
         let has_rgb8 = json_as_u32!(hw_params["HAS_RGB8"]) == 1;
         let has_yuyv8 = json_as_u32!(hw_params["HAS_YUYV8"]) == 1;
+        let pix_per_clk = json_as_u32!(hw_params["SAMPLES_PER_CLOCK"]);
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&
@@ -60,15 +61,15 @@ impl VideoFrameBufRead {
         Ok(VideoFrameBufRead {
             uio_acc: uio,
             udmabuf_acc: udmabuf,
-            fmt_id: 12,
+            fmt_id: 0,
             max_width,
             max_height,
             has_rgb8,
             has_yuyv8,
-            frame_height: 1280,
-            frame_width: 720,
-            pix_per_clk: 1,
-            bytes_per_pix: 2,
+            frame_height: max_height,
+            frame_width: max_width,
+            pix_per_clk,
+            bytes_per_pix: 0,
         })
     }
 
@@ -93,21 +94,24 @@ impl VideoFrameBufRead {
             self.uio_acc.write_mem32(0x00, reg);
         }
     }
-    pub fn start(&mut self) {
-        self.configure();
+    pub fn start(&mut self) -> Result<()> {
+        self.configure()?;
         unsafe {
             self.uio_acc.write_mem32(0x00, 0x81);
         }
+        Ok(())
     }
-    pub fn start_once(&mut self) {
-        self.configure();
+    pub fn start_once(&mut self) -> Result<()> {
+        self.configure()?;
         unsafe {
             self.uio_acc.write_mem32(0x00, 0x01);
         }
+        Ok(())
     }
-    pub fn configure(&mut self) {
-        self.write_format();
+    pub fn configure(&mut self) -> Result<()> {
+        self.write_format()?;
         self.write_framebuf_addr();
+        Ok(())
     }
     pub fn stop(&self) {
         self.set_auto_restart_enable(false);
@@ -133,43 +137,53 @@ impl VideoFrameBufRead {
                 .write_mem32(0x30, self.udmabuf_acc.phys_addr() as u32);
         }
     }
-    pub fn write_frame<V>(&mut self, frame: *const V) {
+    pub fn write_frame<V>(&mut self, frame: *const V) -> Result<()> {
+        ensure!(self.frame_width <= self.max_width, "FRAME_WIDTH too large");
+        ensure!(self.frame_height <= self.max_height, "FRAME_HEIGHT too large");
         let count = if core::mem::size_of::<V>() == 1 {
             (self.frame_width * self.frame_height * self.bytes_per_pix) as usize
         } else {
             1
         };
+        ensure!(core::mem::size_of::<V>() * count < self.udmabuf_acc.phys_addr(), "Array size too large");
         self.stop();
         unsafe {
             self.udmabuf_acc.copy_from(frame, 0x00, count);
         }
-        self.start();
+        self.start()
     }
-    pub fn set_format(&mut self, fmt: &str) {
+    pub fn set_format(&mut self, fmt: &str) -> Result<()> {
         match fmt {
             "YUYV" => {
+                ensure!(self.has_yuyv8, "YUYV8 is not enabled");
                 self.fmt_id = 12;
                 self.bytes_per_pix = 2;
             }
             "RGB8" => {
+                ensure!(self.has_rgb8, "RGB8 is not enabled");
                 self.fmt_id = 20;
                 self.bytes_per_pix = 3;
             }
             _ => {
-                unimplemented!();
+                bail!("{} is not enabled", fmt);
             }
         }
+        Ok(())
     }
-    pub fn get_format(&self) -> &str {
+    pub fn get_format(&self) -> Result<&str> {
         match self.fmt_id {
-            12 => "YUYV",
-            20 => "RGB8",
+             0 => Ok("Not Set"),
+            12 => Ok("YUYV"),
+            20 => Ok("RGB8"),
             _ => {
-                unimplemented!();
+                bail!("unknown fmt: {}", self.fmt_id);
             }
         }
     }
-    pub fn write_format(&self) {
+    pub fn write_format(&self) -> Result<()> {
+        ensure!(self.frame_width <= self.max_width, "FRAME_WIDTH too large");
+        ensure!(self.frame_height <= self.max_height, "FRAME_HEIGHT too large");
+        ensure!(self.fmt_id != 0, "Format is not set");
         let mmap_width_bytes = self.pix_per_clk * 8;
         let stride = ((self.frame_width * self.bytes_per_pix + mmap_width_bytes - 1)
             / mmap_width_bytes)
@@ -180,6 +194,7 @@ impl VideoFrameBufRead {
             self.uio_acc.write_mem32(0x20, stride);
             self.uio_acc.write_mem32(0x28, self.fmt_id);
         }
+        Ok(())
     }
 }
 
@@ -210,6 +225,7 @@ impl VideoFrameBufWrite {
         let max_height = json_as_u32!(hw_params["MAX_ROWS"]);
         let has_rgb8 = json_as_u32!(hw_params["HAS_RGB8"]) == 1;
         let has_yuyv8 = json_as_u32!(hw_params["HAS_YUYV8"]) == 1;
+        let pix_per_clk = json_as_u32!(hw_params["SAMPLES_PER_CLOCK"]);
         ensure!(
             vendor == "xilinx.com" &&
             library == "ip" &&
@@ -236,15 +252,15 @@ impl VideoFrameBufWrite {
         Ok(VideoFrameBufWrite {
             uio_acc: uio,
             udmabuf_acc: udmabuf,
-            fmt_id: 12,
+            fmt_id: 0,
             max_width,
             max_height,
             has_rgb8,
             has_yuyv8,
-            frame_height: max_width,
-            frame_width: max_height,
-            pix_per_clk: 1,
-            bytes_per_pix: 2,
+            frame_height: max_height,
+            frame_width: max_width,
+            pix_per_clk,
+            bytes_per_pix: 0,
         })
     }
 
@@ -269,17 +285,20 @@ impl VideoFrameBufWrite {
             self.uio_acc.write_mem32(0x00, reg);
         }
     }
-    pub fn start(&self) {
-        self.write_format();
+    pub fn start(&self) -> Result<()> {
+        self.write_format()?;
         self.set_framebuf_addr();
         unsafe {
             self.uio_acc.write_mem32(0x00, 0x81);
         }
+        Ok(())
     }
-    pub fn start_once(&self) {
+    pub fn start_once(&self) -> Result<()> {
+        self.write_format()?;
         unsafe {
             self.uio_acc.write_mem32(0x00, 0x01);
         }
+        Ok(())
     }
     pub fn stop(&self) {
         self.set_auto_restart_enable(false);
@@ -290,10 +309,12 @@ impl VideoFrameBufWrite {
                 .write_mem32(0x30, self.udmabuf_acc.phys_addr() as u32);
         }
     }
-    pub fn read_frame_as_image(&self) -> image::RgbImage {
-        image::ImageBuffer::from_raw(self.frame_width, self.frame_height, self.read_frame()).unwrap()
+    pub fn read_frame_as_image(&self) -> Result<image::RgbImage> {
+        image::ImageBuffer::from_raw(self.frame_width, self.frame_height, self.read_frame()?).context("Can't convert to image")
     }
-    pub fn read_frame(&self) -> Vec<u8> {
+    pub fn read_frame(&self) -> Result<Vec<u8>> {
+        ensure!(self.frame_width <= self.max_width, "FRAME_WIDTH too large");
+        ensure!(self.frame_height <= self.max_height, "FRAME_HEIGHT too large");
         let w = self.frame_width as usize;
         let h = self.frame_height as usize;
         let bpp = self.bytes_per_pix as usize;
@@ -303,33 +324,40 @@ impl VideoFrameBufWrite {
                 .copy_to(0x00, buf.as_mut_ptr(), w * h * bpp);
             buf.set_len(w * h * bpp);
         }
-        buf
+        Ok(buf)
     }
-    pub fn set_format(&mut self, fmt: &str) {
+    pub fn set_format(&mut self, fmt: &str) -> Result<()> {
         match fmt {
             "YUYV" => {
+                ensure!(self.has_yuyv8, "YUYV8 is not enabled");
                 self.fmt_id = 12;
                 self.bytes_per_pix = 2;
             }
             "RGB8" => {
+                ensure!(self.has_rgb8, "RGB8 is not enabled");
                 self.fmt_id = 20;
                 self.bytes_per_pix = 3;
             }
             _ => {
-                unimplemented!();
+                bail!("{} is not enabled", fmt);
             }
         }
+        Ok(())
     }
-    pub fn get_format(&self) -> &str {
+    pub fn get_format(&self) -> Result<&str> {
         match self.fmt_id {
-            12 => "YUYV",
-            20 => "RGB8",
+             0 => Ok("Not Set"),
+            12 => Ok("YUYV"),
+            20 => Ok("RGB8"),
             _ => {
-                unimplemented!();
+                bail!("unknown fmt: {}", self.fmt_id);
             }
         }
     }
-    pub fn write_format(&self) {
+    pub fn write_format(&self) -> Result<()> {
+        ensure!(self.frame_width <= self.max_width, "FRAME_WIDTH too large");
+        ensure!(self.frame_height <= self.max_height, "FRAME_HEIGHT too large");
+        ensure!(self.fmt_id != 0, "Format is not set");
         let mmap_width_bytes = self.pix_per_clk * 8;
         let stride = ((self.frame_width * self.bytes_per_pix + mmap_width_bytes - 1)
             / mmap_width_bytes)
@@ -340,5 +368,6 @@ impl VideoFrameBufWrite {
             self.uio_acc.write_mem32(0x20, stride);
             self.uio_acc.write_mem32(0x28, self.fmt_id);
         }
+        Ok(())
     }
 }
