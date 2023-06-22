@@ -24,9 +24,23 @@ macro_rules! json_as_u32 {
 }
 
 #[macro_export]
+macro_rules! json_as_i32 {
+    ($json_value: expr) => {
+        $json_value.as_i64().context(format!("{} is not numeric", stringify!($json_value)))? as i32
+    };
+}
+
+#[macro_export]
 macro_rules! json_as_str {
     ($json_value: expr) => {
         $json_value.as_str().context(format!("{} is not string", stringify!($json_value)))?
+    };
+}
+
+#[macro_export]
+macro_rules! json_as_f32 {
+    ($json_value: expr) => {
+        $json_value.as_str().context(format!("{} is not string", stringify!($json_value)))?.parse::<f32>()?
     };
 }
 
