@@ -83,6 +83,18 @@ impl UmvMotorController {
         self.write_accel_left(left_val)?;
         self.write_accel_right(right_val)
     }
+    pub fn set_accel_rpm_left(&self, val: f32) -> Result<()> {
+        let acc_val  = (val  * 360. * self.fb_edge_period / 60.).floor() as i32;
+        self.write_accel_left(acc_val)
+    }
+    pub fn set_accel_rpm_right(&self, val: f32) -> Result<()> {
+        let acc_val  = (val  * 360. * self.fb_edge_period / 60.).floor() as i32;
+        self.write_accel_right(acc_val)
+    }
+    pub fn set_accel_rpm(&self, left_val: f32, right_val: f32) -> Result<()> {
+        self.set_accel_rpm_left(left_val)?;
+        self.set_accel_rpm_right(right_val)
+    }
     pub fn write_kp_right(&self, val: f32) -> Result<()> {
         ensure!(val >= 0., "Kp_right must be a positive number");
         ensure!(val < (2.0_f32).powi(FIXED_DECIMAL_BITW), "Kp_right must be less than {}", (2.0_f32).powi(FIXED_DECIMAL_BITW));
@@ -185,5 +197,11 @@ impl UmvMotorController {
     }
     pub fn get_total_rotation_left(&self) -> f32 {
         (self.read_total_rotation_left() as f32) / 360.
+    }
+    pub fn get_max_accel(&self) -> i32 {
+        self.accel_max
+    }
+    pub fn get_max_rpm(&self) -> f32 {
+        (self.accel_max as f32) * 60. / self.fb_edge_period / 360.
     }
 }
