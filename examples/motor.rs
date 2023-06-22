@@ -13,13 +13,48 @@ fn main() -> Result<()> {
     motor.set_bias(0.)?;
     motor.reset_total_rotation();
 
+    let rpm = motor.get_max_rpm() / 2.;
+
+    let tire_radius: f32 = 1.5;
+    let target_distance = 10.;
+
     motor.write_brake(false);
-    motor.write_accel_left(80)?;
-    for _ in 0..10 {
-        println!("{} RPM (Read val: {})", motor.get_wheel_rpm_left(), motor.read_rotation_left());
-        thread::sleep(time::Duration::from_millis(500));
+    motor.set_accel_rpm(rpm, rpm)?;
+    loop {
+        let distance = motor.get_total_rotation_left() * tire_radius.powi(2) * std::f32::consts::PI;
+        println!("{} RPM (Read val: {}) distance: {} cm / {} cm",
+            motor.get_wheel_rpm_left(),
+            motor.read_rotation_left(),
+            distance,
+            target_distance
+        );
+        if target_distance <= distance {
+            break;
+        }
+        thread::sleep(time::Duration::from_millis(100));
     }
-    motor.write_accel_left(0)?;
+    motor.write_accel(0, 0)?;
+    motor.write_brake(true);
+
+    motor.reset_total_rotation();
+    thread::sleep(time::Duration::from_millis(500));
+
+    motor.write_brake(false);
+    motor.set_accel_rpm(-rpm, -rpm)?;
+    loop {
+        let distance = motor.get_total_rotation_left() * tire_radius.powi(2) * std::f32::consts::PI;
+        println!("{} RPM (Read val: {}) distance: {} cm / {} cm",
+            motor.get_wheel_rpm_left(),
+            motor.read_rotation_left(),
+            distance,
+            target_distance
+        );
+        if target_distance <= distance {
+            break;
+        }
+        thread::sleep(time::Duration::from_millis(100));
+    }
+    motor.write_accel(0, 0)?;
     motor.write_brake(true);
 
     println!("{}", motor.get_total_rotation_left());
