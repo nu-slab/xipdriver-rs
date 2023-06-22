@@ -19,6 +19,8 @@ pub struct VideoFrameBufRead {
     pub frame_height: u32,
     pix_per_clk: u32,
     bytes_per_pix: u32,
+    tie_en: bool,
+    tie_addr: usize,
 }
 
 impl VideoFrameBufRead {
@@ -70,6 +72,8 @@ impl VideoFrameBufRead {
             frame_width: max_width,
             pix_per_clk,
             bytes_per_pix: 0,
+            tie_en: false,
+            tie_addr: 0,
         })
     }
 
@@ -133,8 +137,12 @@ impl VideoFrameBufRead {
     }
     pub fn write_framebuf_addr(&self) {
         unsafe {
-            self.uio_acc
-                .write_mem32(0x30, self.udmabuf_acc.phys_addr() as u32);
+            if self.tie_en {
+                self.uio_acc.write_mem32(0x30, self.tie_addr as u32);
+            }
+            else {
+                self.uio_acc.write_mem32(0x30, self.udmabuf_acc.phys_addr() as u32);
+            }
         }
     }
     pub fn write_frame<V>(&mut self, frame: *const V) -> Result<()> {
@@ -195,6 +203,13 @@ impl VideoFrameBufRead {
             self.uio_acc.write_mem32(0x28, self.fmt_id);
         }
         Ok(())
+    }
+    pub fn tie(&mut self, vfbw: &VideoFrameBufWrite) {
+        self.tie_en = true;
+        self.tie_addr = vfbw.get_addr();
+    }
+    pub fn untie(&mut self) {
+        self.tie_en = false;
     }
 }
 
@@ -369,5 +384,8 @@ impl VideoFrameBufWrite {
             self.uio_acc.write_mem32(0x28, self.fmt_id);
         }
         Ok(())
+    }
+    pub fn get_addr(&self) -> usize {
+        self.udmabuf_acc.phys_addr()
     }
 }
