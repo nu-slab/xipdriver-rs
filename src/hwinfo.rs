@@ -52,3 +52,16 @@ pub fn read(filepath: &str) -> Result<serde_json::Value> {
     let hw_json: serde_json::Value = serde_json::from_reader(reader).unwrap();
     Ok(hw_json)
 }
+
+
+pub fn match_hw(hw_json: &serde_json::Value, hier_name: &str, hw_name: &str) -> Result<String> {
+    let hw_object = json_as_map!(hw_json);
+    for k in hw_object.keys() {
+        if let Some(_) = k.find(hier_name) {
+            if json_as_str!(hw_object[k]["name"])== hw_name {
+                return Ok(k.clone());
+            }
+        }
+    }
+    Err(anyhow!("hw object not found: {}, {}", hier_name, hw_name))
+}
