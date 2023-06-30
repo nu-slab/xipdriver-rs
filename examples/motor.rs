@@ -15,7 +15,7 @@ fn main() -> Result<()> {
 
     let rpm = motor.get_max_rpm() / 4.;
 
-    let tire_radius: f32 = 1.5;
+    let tire_radius: f32 = 3.;
     let target_distance = 10.;
     let sleep_dur = time::Duration::from_millis(50);
 
