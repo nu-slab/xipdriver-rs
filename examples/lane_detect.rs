@@ -8,13 +8,13 @@ use std::time::Instant;
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    let hw_json = xipdriver_rs::hwinfo::read("hwinfo.json")?;
+    let hw_json = xipdriver_rs::hwinfo::read("/umv/hwinfo.json")?;
 
-    let mut ld = UmvLaneDetector::new(&hw_json["/umv_lane_detector_0"])?;
+    let mut ld = UmvLaneDetector::new(&hw_json["/lane_detection/umv_lane_detector"])?;
 
-    let mut vfb_r = VideoFrameBufRead::new(&hw_json["/v_frmbuf_rd_0"])?;
+    let mut vfb_r = VideoFrameBufRead::new(&hw_json["/lane_detection/v_frmbuf_rd"])?;
 
-    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/v_frmbuf_wr_0"])?;
+    let mut vfb_w = VideoFrameBufWrite::new(&hw_json["/lane_detection/v_frmbuf_wr"])?;
 
     let frame_width = ld.get_image_width();
     let frame_height = ld.get_image_height();
