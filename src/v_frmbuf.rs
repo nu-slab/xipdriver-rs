@@ -317,6 +317,7 @@ impl VideoFrameBufWrite {
     }
     pub fn stop(&self) {
         self.set_auto_restart_enable(false);
+        while !self.is_ready() { }
     }
     pub fn set_framebuf_addr(&self) {
         unsafe {
@@ -334,11 +335,13 @@ impl VideoFrameBufWrite {
         let h = self.frame_height as usize;
         let bpp = self.bytes_per_pix as usize;
         let mut buf = Vec::with_capacity(w * h * bpp);
+        self.stop();
         unsafe {
             self.udmabuf_acc
                 .copy_to(0x00, buf.as_mut_ptr(), w * h * bpp);
             buf.set_len(w * h * bpp);
         }
+        self.start()?;
         Ok(buf)
     }
     pub fn set_format(&mut self, fmt: &str) -> Result<()> {
