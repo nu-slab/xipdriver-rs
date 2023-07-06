@@ -28,6 +28,7 @@ const FINDLINES_HLINE_WIDTH_MIN:usize  = 0x44;
 const FINDLINES_HLINE_THRESH_INTERVAL:usize = 0x48;
 const FL_VLINE_WIDTH_DETECT_MIN:usize = 0x4C;
 const FL_HLINE_WIDTH_DETECT_MIN:usize = 0x50;
+const FINDLINES_HORIZON:usize = 0x54;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LanePoint {
@@ -65,6 +66,7 @@ pub struct UmvLaneDetector {
     pub fl_vline_din_mask: u32,
     pub fl_vline_width_detect_min: u32,
     pub fl_hline_width_detect_min: u32,
+    pub findlines_horizon: u32,
 }
 
 impl UmvLaneDetector {
@@ -126,6 +128,7 @@ impl UmvLaneDetector {
             fl_vline_din_mask: 0b1110,
             fl_vline_width_detect_min: 10,
             fl_hline_width_detect_min: 10,
+            findlines_horizon: 0,
         })
     }
     pub fn get_status(&self) -> u32 {
@@ -196,6 +199,7 @@ impl UmvLaneDetector {
         self.write_framebuf_addr();
         self.write_fl_vline_width_detect_min();
         self.write_fl_hline_width_detect_min();
+        self.write_findlines_horizon()?;
         Ok(())
     }
     pub fn write_filter_type(&self) {
@@ -229,8 +233,9 @@ impl UmvLaneDetector {
         }
     }
     pub fn write_fl_vline_width(&self) -> Result<()> {
+        ensure!(self.findlines_horizon <= self.image_height, "image_height < findlines_horizon");
         ensure!(self.fl_vline_width_min <= self.fl_vline_width_max, "fl_width_max < fl_width_min");
-        let interval = self.image_height / (self.fl_vline_width_max - self.fl_vline_width_min + 1);
+        let interval = (self.image_height - self.findlines_horizon) / (self.fl_vline_width_max - self.fl_vline_width_min + 1);
         self.write_fl_vline_width_inc_interval(interval);
         self.write_fl_vline_width_min();
         Ok(())
@@ -252,8 +257,9 @@ impl UmvLaneDetector {
         }
     }
     pub fn write_fl_hline_width(&self) -> Result<()> {
+        ensure!(self.findlines_horizon <= self.image_height, "image_height < findlines_horizon");
         ensure!(self.fl_hline_width_min <= self.fl_hline_width_max, "fl_width_max < fl_width_min");
-        let interval = self.image_height / (self.fl_hline_width_max - self.fl_hline_width_min + 1);
+        let interval = (self.image_height - self.findlines_horizon) / (self.fl_hline_width_max - self.fl_hline_width_min + 1);
         self.write_fl_hline_width_inc_interval(interval);
         self.write_fl_hline_width_min();
         Ok(())
@@ -296,6 +302,13 @@ impl UmvLaneDetector {
             self.uio_acc.write_mem32(FL_HLINE_WIDTH_DETECT_MIN, self.fl_hline_width_detect_min);
         }
     }
+    pub fn write_findlines_horizon(&self) -> Result<()> {
+        ensure!(self.findlines_horizon <= self.image_height, "image_height < findlines_horizon");
+        unsafe {
+            self.uio_acc.write_mem32(FINDLINES_HORIZON, self.findlines_horizon);
+        }
+        Ok(())
+    }
     pub fn read_params(&mut self) {
         unsafe {
             self.filter_type        = self.uio_acc.read_mem32(FILTER_TYPE);
@@ -304,12 +317,12 @@ impl UmvLaneDetector {
             self.edge_select_thresh = self.uio_acc.read_mem32(EDGE_SELECT_THRESH);
             let fl_vline_width_interval = self.uio_acc.read_mem32(FINDLINES_VLINE_WIDTH_INTERVAL);
             self.fl_vline_width_min = self.uio_acc.read_mem32(FINDLINES_VLINE_WIDTH_MIN);
-            self.fl_vline_width_max = (self.image_height / fl_vline_width_interval) + self.fl_vline_width_min - 1;
+            self.fl_vline_width_max = ((self.image_height - self.findlines_horizon) / fl_vline_width_interval) + self.fl_vline_width_min - 1;
             let fl_vline_thresh_interval = self.uio_acc.read_mem32(FINDLINES_VLINE_THRESH_INTERVAL);
             self.fl_vline_thresh = fl_vline_thresh_interval; // (self.image_height / fl_vline_thresh_interval) - 1;
             let fl_hline_width_interval = self.uio_acc.read_mem32(FINDLINES_HLINE_WIDTH_INTERVAL);
             self.fl_hline_width_min = self.uio_acc.read_mem32(FINDLINES_HLINE_WIDTH_MIN);
-            self.fl_hline_width_max = (self.image_height / fl_hline_width_interval) + self.fl_hline_width_min - 1;
+            self.fl_hline_width_max = ((self.image_height - self.findlines_horizon) / fl_hline_width_interval) + self.fl_hline_width_min - 1;
             let fl_hline_thresh_interval = self.uio_acc.read_mem32(FINDLINES_HLINE_THRESH_INTERVAL);
             self.fl_hline_thresh = fl_hline_thresh_interval; //(self.image_height / fl_hline_thresh_interval) - 1;
             self.fl_detect_interval = self.uio_acc.read_mem32(FINDLINES_DETECT_INTERVAL);
