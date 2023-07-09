@@ -167,11 +167,11 @@ impl UmvMotorController {
         self.write_bias_left(val)?;
         self.write_bias_right(val)
     }
-    pub fn read_rotation_right(&self) -> u32 {
-        unsafe { self.uio_acc.read_mem32(ROTATION_R) }
+    pub fn read_rotation_right(&self) -> i32 {
+        unsafe { self.uio_acc.read_memi32(ROTATION_R) }
     }
-    pub fn read_rotation_left(&self) -> u32 {
-        unsafe { self.uio_acc.read_mem32(ROTATION_L) }
+    pub fn read_rotation_left(&self) -> i32 {
+        unsafe { self.uio_acc.read_memi32(ROTATION_L) }
     }
     pub fn get_wheel_rpm_right(&self) -> f32 {
         // degree per (self.fb_edge_period) sec.
@@ -186,11 +186,11 @@ impl UmvMotorController {
     pub fn reset_total_rotation(&self) {
         unsafe { self.uio_acc.write_mem32(ROTATION_RESET, 1); }
     }
-    pub fn read_total_rotation_right(&self) -> u32 {
-        unsafe { self.uio_acc.read_mem32(TOTAL_ROTATION_R) }
+    pub fn read_total_rotation_right(&self) -> i32 {
+        unsafe { self.uio_acc.read_memi32(TOTAL_ROTATION_R) }
     }
-    pub fn read_total_rotation_left(&self) -> u32 {
-        unsafe { self.uio_acc.read_mem32(TOTAL_ROTATION_L) }
+    pub fn read_total_rotation_left(&self) -> i32 {
+        unsafe { self.uio_acc.read_memi32(TOTAL_ROTATION_L) }
     }
     pub fn get_total_rotation_right(&self) -> f32 {
         (self.read_total_rotation_right() as f32) / 360.
