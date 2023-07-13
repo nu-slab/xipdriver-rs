@@ -29,6 +29,7 @@ const FINDLINES_HLINE_THRESH_INTERVAL:usize = 0x48;
 const FL_VLINE_WIDTH_DETECT_MIN:usize = 0x4C;
 const FL_HLINE_WIDTH_DETECT_MIN:usize = 0x50;
 const FINDLINES_HORIZON:usize = 0x54;
+const FL_SEQUENCE_RANGE:usize = 0x58;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LanePoint {
@@ -67,6 +68,7 @@ pub struct UmvLaneDetector {
     pub fl_vline_width_detect_min: u32,
     pub fl_hline_width_detect_min: u32,
     pub findlines_horizon: u32,
+    pub fl_sequence_range: u32,
 }
 
 impl UmvLaneDetector {
@@ -116,11 +118,11 @@ impl UmvLaneDetector {
             bin_filter_thresh: 120,
             edge_filter_thresh: 85,
             edge_select_thresh: 3,
-            fl_vline_width_max: 55,
-            fl_vline_width_min: 40,
-            fl_vline_thresh: 15,
-            fl_hline_width_max: 55,
-            fl_hline_width_min: 46,
+            fl_vline_width_max: 70,
+            fl_vline_width_min: 70,
+            fl_vline_thresh: 30,
+            fl_hline_width_max: 65,
+            fl_hline_width_min: 65,
             fl_hline_thresh: 15,
             fl_detect_interval: 6,
             video_mode: 0,
@@ -129,6 +131,7 @@ impl UmvLaneDetector {
             fl_vline_width_detect_min: 10,
             fl_hline_width_detect_min: 10,
             findlines_horizon: 0,
+            fl_sequence_range: 5,
         })
     }
     pub fn get_status(&self) -> u32 {
@@ -200,6 +203,7 @@ impl UmvLaneDetector {
         self.write_fl_vline_width_detect_min();
         self.write_fl_hline_width_detect_min();
         self.write_findlines_horizon()?;
+        self.write_fl_sequence_range();
         Ok(())
     }
     pub fn write_filter_type(&self) {
@@ -309,6 +313,11 @@ impl UmvLaneDetector {
         }
         Ok(())
     }
+    pub fn write_fl_sequence_range(&self) {
+        unsafe {
+            self.uio_acc.write_mem32(FL_SEQUENCE_RANGE, self.fl_sequence_range);
+        }
+    }
     pub fn read_params(&mut self) {
         unsafe {
             self.filter_type        = self.uio_acc.read_mem32(FILTER_TYPE);
@@ -317,6 +326,7 @@ impl UmvLaneDetector {
             self.edge_select_thresh = self.uio_acc.read_mem32(EDGE_SELECT_THRESH);
             let fl_vline_width_interval = self.uio_acc.read_mem32(FINDLINES_VLINE_WIDTH_INTERVAL);
             self.fl_vline_width_min = self.uio_acc.read_mem32(FINDLINES_VLINE_WIDTH_MIN);
+            self.findlines_horizon = self.uio_acc.read_mem32(FINDLINES_HORIZON);
             self.fl_vline_width_max = ((self.image_height - self.findlines_horizon) / fl_vline_width_interval) + self.fl_vline_width_min - 1;
             let fl_vline_thresh_interval = self.uio_acc.read_mem32(FINDLINES_VLINE_THRESH_INTERVAL);
             self.fl_vline_thresh = fl_vline_thresh_interval; // (self.image_height / fl_vline_thresh_interval) - 1;
@@ -329,6 +339,7 @@ impl UmvLaneDetector {
             self.video_mode = self.uio_acc.read_mem32(VID_MODE);
             self.fl_hline_din_mask = self.uio_acc.read_mem32(FL_HLINE_DIN_MASK);
             self.fl_vline_din_mask = self.uio_acc.read_mem32(FL_VLINE_DIN_MASK);
+            self.fl_sequence_range = self.uio_acc.read_mem32(FL_SEQUENCE_RANGE);
         }
     }
     pub fn get_image_width(&self) -> u32 {
