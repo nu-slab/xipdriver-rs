@@ -2,7 +2,6 @@
 
 use anyhow::{ensure, Result, Context, bail};
 
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 use jelly_mem_access::*;
 
 use crate::json_as_map;
