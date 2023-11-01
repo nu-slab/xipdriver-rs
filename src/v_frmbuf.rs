@@ -153,7 +153,7 @@ impl VideoFrameBufRead {
             1
         };
         ensure!(core::mem::size_of::<V>() * count < self.udmabuf_acc.phys_addr(), "Array size too large");
-        self.stop();
+        // self.stop();
         unsafe {
             self.udmabuf_acc.copy_from(frame, 0x00, count);
         }
@@ -316,7 +316,7 @@ impl VideoFrameBufWrite {
     }
     pub fn stop(&self) {
         self.set_auto_restart_enable(false);
-        while !self.is_ready() { }
+        // while !self.is_ready() { }
     }
     pub fn set_framebuf_addr(&self) {
         unsafe {
