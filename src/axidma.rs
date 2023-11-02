@@ -238,7 +238,7 @@ impl AxiDma {
             ch.write(data);
         }
         else {
-            bail!("The S2MM channel is not supported on this IP.");
+            bail!("The MM2S channel is not supported on this IP.");
         }
         Ok(())
     }
