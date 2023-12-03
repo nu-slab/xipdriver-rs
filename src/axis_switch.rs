@@ -37,23 +37,23 @@ impl AxisSwitch {
         })
     }
 
-    pub fn enable_mi_port(&self, mi_index: usize, si_port: u32) {
-        let mi_port_addr = 0x40 + 4 * mi_index;
+    pub fn enable_mi_port(&self, mi_index: u8, si_port: u8) {
+        let mi_port_addr = 0x40 + 4 * (mi_index as usize);
 
         unsafe {
-            self.uio_acc.write_mem32(mi_port_addr, si_port);
+            self.uio_acc.write_mem32(mi_port_addr, si_port as u32);
         }
     }
-    pub fn disable_mi_port(&self, mi_index: usize) {
-        let mi_port_addr = 0x40 + 4 * mi_index;
+    pub fn disable_mi_port(&self, mi_index: u8) {
+        let mi_port_addr = 0x40 + 4 * (mi_index as usize);
 
         unsafe {
             self.uio_acc.write_mem32(mi_port_addr, 0x80000000);
         }
     }
 
-    pub fn is_mi_port_enabled(&self, mi_index: usize, si_index: u32) -> bool {
-        let mi_port_addr = 0x40 + 4 * mi_index;
+    pub fn is_mi_port_enabled(&self, mi_index: u8, si_index: u8) -> bool {
+        let mi_port_addr = 0x40 + 4 * (mi_index as usize);
         let mut reg_value = unsafe {
             self.uio_acc.read_mem32(mi_port_addr)
         };
@@ -61,11 +61,12 @@ impl AxisSwitch {
         let enable = (reg_value >> 31) != 0;
         reg_value &= 0x0F;
 
-        ((reg_value == si_index) && (!enable)) || ((reg_value & si_index) != 0 && (!enable))
+        let si_index_u32 = si_index as u32;
+        ((reg_value == si_index_u32) && (!enable)) || ((reg_value & si_index_u32) != 0 && (!enable))
     }
 
-    pub fn is_mi_port_disabled(&self, mi_index: usize) -> bool {
-        let mi_port_addr = 0x40 + 4 * mi_index;
+    pub fn is_mi_port_disabled(&self, mi_index: u8) -> bool {
+        let mi_port_addr = 0x40 + 4 * (mi_index as usize);
         let reg_value = unsafe {
             self.uio_acc.read_mem32(mi_port_addr)
         };
