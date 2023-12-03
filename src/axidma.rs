@@ -27,7 +27,11 @@ pub struct AxiDmaChannel {
 }
 
 impl AxiDmaChannel {
-    pub fn new(hw_info: &serde_json::Value, mode: DmaChannelMode, udmabuf_name: &str) -> Result<Self> {
+    pub fn new(
+        hw_info: &serde_json::Value,
+        mode: DmaChannelMode,
+        udmabuf_name: &str,
+    ) -> Result<Self> {
         let hw_object = json_as_map!(hw_info);
         // let hw_params = json_as_map!(hw_object["params"]);
         let vendor = json_as_str!(hw_object["vendor"]);
@@ -46,9 +50,7 @@ impl AxiDmaChannel {
             }
         };
         let udmabuf = match UdmabufAccessor::new(udmabuf_name, false) {
-            Ok(udmabuf_acc) => {
-                udmabuf_acc
-            },
+            Ok(udmabuf_acc) => udmabuf_acc,
             Err(e) => {
                 bail!("UdmabufAccessor: {}", e)
             }
@@ -108,7 +110,10 @@ impl AxiDmaChannel {
         unsafe { self.uio_acc.read_mem32(self.offset + LENGTH) }
     }
     pub fn write<V>(&mut self, data: &[V]) -> Result<()> {
-        ensure!(self.mode == DmaChannelMode::MM2S, "Channel mode is not MM2S");
+        ensure!(
+            self.mode == DmaChannelMode::MM2S,
+            "Channel mode is not MM2S"
+        );
         ensure!(self.is_running(), "DMA channel not started");
         ensure!(
             self.is_idle() || self.first_transfer,
@@ -124,8 +129,37 @@ impl AxiDmaChannel {
         self.first_transfer = false;
         Ok(())
     }
+    pub fn write_with_size<V>(&mut self, data: &[V], size: usize) -> Result<()> {
+        ensure!(
+            self.mode == DmaChannelMode::MM2S,
+            "Channel mode is not MM2S"
+        );
+        ensure!(self.is_running(), "DMA channel not started");
+        ensure!(
+            self.is_idle() || self.first_transfer,
+            "DMA channel not idle"
+        );
+        ensure!(
+            size <= data.len(),
+            "The size of the transfer is too large. ({} > {})",
+            size,
+            data.len()
+        );
+        let size_of_v = core::mem::size_of::<V>();
+        unsafe {
+            self.udmabuf_acc
+                .copy_from(data.as_ptr(), 0, size * size_of_v);
+        }
+        self.write_buf_addr();
+        self.write_len((size * size_of_v) as u32);
+        self.first_transfer = false;
+        Ok(())
+    }
     pub fn read<V>(&mut self, len: usize) -> Result<Vec<V>> {
-        ensure!(self.mode == DmaChannelMode::S2MM, "Channel mode is not S2MM");
+        ensure!(
+            self.mode == DmaChannelMode::S2MM,
+            "Channel mode is not S2MM"
+        );
         ensure!(self.is_running(), "DMA channel not started");
         ensure!(
             self.is_idle() || self.first_transfer,
@@ -192,20 +226,25 @@ impl AxiDma {
         } else {
             let udmabuf_name = json_as_str!(udmabuf_names[udmabuf_i]);
             udmabuf_i += 1;
-            Some(AxiDmaChannel::new(hw_info, DmaChannelMode::MM2S, udmabuf_name)?)
+            Some(AxiDmaChannel::new(
+                hw_info,
+                DmaChannelMode::MM2S,
+                udmabuf_name,
+            )?)
         };
 
         let s2mm = if hw_params["C_NUM_S2MM_CHANNELS"] == 0 {
             None
         } else {
             let udmabuf_name = json_as_str!(udmabuf_names[udmabuf_i]);
-            Some(AxiDmaChannel::new(hw_info, DmaChannelMode::S2MM, udmabuf_name)?)
+            Some(AxiDmaChannel::new(
+                hw_info,
+                DmaChannelMode::S2MM,
+                udmabuf_name,
+            )?)
         };
 
-        Ok(AxiDma {
-            mm2s,
-            s2mm,
-        })
+        Ok(AxiDma { mm2s, s2mm })
     }
 
     pub fn start(&mut self) {
@@ -227,8 +266,15 @@ impl AxiDma {
     pub fn write<V>(&mut self, data: &[V]) -> Result<()> {
         if let Some(ch) = &mut self.mm2s {
             ch.write(data)?;
+        } else {
+            bail!("The MM2S channel is not supported on this IP.");
         }
-        else {
+        Ok(())
+    }
+    pub fn write_with_size<V>(&mut self, data: &[V], size: usize) -> Result<()> {
+        if let Some(ch) = &mut self.mm2s {
+            ch.write_with_size(data, size)?;
+        } else {
             bail!("The MM2S channel is not supported on this IP.");
         }
         Ok(())
@@ -236,8 +282,49 @@ impl AxiDma {
     pub fn read<V>(&mut self, len: usize) -> Result<Vec<V>> {
         if let Some(ch) = &mut self.s2mm {
             ch.read(len)
+        } else {
+            bail!("The S2MM channel is not supported on this IP.");
         }
-        else {
+    }
+    pub fn is_mm2s_running(&self) -> Result<bool> {
+        if let Some(ch) = &self.mm2s {
+            Ok(ch.is_running())
+        } else {
+            bail!("The MM2S channel is not supported on this IP.");
+        }
+    }
+    pub fn is_mm2s_idle(&self) -> Result<bool> {
+        if let Some(ch) = &self.mm2s {
+            Ok(ch.is_idle())
+        } else {
+            bail!("The MM2S channel is not supported on this IP.");
+        }
+    }
+    pub fn is_mm2s_error(&self) -> Result<bool> {
+        if let Some(ch) = &self.mm2s {
+            Ok(ch.is_error())
+        } else {
+            bail!("The MM2S channel is not supported on this IP.");
+        }
+    }
+    pub fn is_s2mm_running(&self) -> Result<bool> {
+        if let Some(ch) = &self.s2mm {
+            Ok(ch.is_running())
+        } else {
+            bail!("The S2MM channel is not supported on this IP.");
+        }
+    }
+    pub fn is_s2mm_idle(&self) -> Result<bool> {
+        if let Some(ch) = &self.s2mm {
+            Ok(ch.is_idle())
+        } else {
+            bail!("The S2MM channel is not supported on this IP.");
+        }
+    }
+    pub fn is_s2mm_error(&self) -> Result<bool> {
+        if let Some(ch) = &self.s2mm {
+            Ok(ch.is_error())
+        } else {
             bail!("The S2MM channel is not supported on this IP.");
         }
     }
