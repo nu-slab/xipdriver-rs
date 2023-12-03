@@ -83,23 +83,17 @@ impl AxisSwitch {
         }
     }
 
-    pub fn reg_update_enable(&mut self, base_address: usize) {
-        let ctrl_offset = 0;
-        let reg_update_mask = 2;
-
+    pub fn reg_update_enable(&mut self) {
         unsafe {
-            let reg_value = self.uio_acc.read_mem32(base_address + ctrl_offset);
-            self.uio_acc.write_mem32(base_address + ctrl_offset, reg_value | reg_update_mask);
+            let reg_value = self.uio_acc.read_mem32(0x00);
+            self.uio_acc.write_mem32(0x00, reg_value | 0x02);
         }
     }
 
-    pub fn reg_update_disable(&mut self, base_address: usize) {
-        let ctrl_offset = 0;
-        let reg_update_mask = 2;
-
+    pub fn reg_update_disable(&mut self) {
         unsafe {
-            let reg_value = self.uio_acc.read_mem32(base_address + ctrl_offset);
-            self.uio_acc.write_mem32(base_address + ctrl_offset, reg_value & (!reg_update_mask));
+            let reg_value = self.uio_acc.read_mem32(0x00);
+            self.uio_acc.write_mem32(0x00, reg_value & (!0x02));
         }
     }
 }
