@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use anyhow::{bail, ensure, Context, Result};
 
 use jelly_mem_access::*;
@@ -7,7 +5,6 @@ use jelly_mem_access::*;
 use crate::json_as_map;
 use crate::json_as_str;
 use crate::json_as_vec;
-use crate::vdma::AxiVdmaMM2S;
 
 const DMACR: usize = 0x00;
 const DMASR: usize = 0x04;
@@ -55,11 +52,6 @@ impl AxiDmaChannel {
             Err(e) => {
                 bail!("UdmabufAccessor: {}", e)
             }
-        };
-        let offset = if mode == DmaChannelMode::MM2S {
-            0
-        } else {
-            S2MM_OFFSET
         };
 
         Ok(AxiDmaChannel {
@@ -146,7 +138,7 @@ impl AxiDmaChannel {
 
         let mut buf = Vec::with_capacity(size);
 
-        self.wait();
+        self.wait()?;
 
         unsafe {
             self.udmabuf_acc.copy_to(0x00, buf.as_mut_ptr(), bytes);
@@ -207,7 +199,6 @@ impl AxiDma {
             None
         } else {
             let udmabuf_name = json_as_str!(udmabuf_names[udmabuf_i]);
-            udmabuf_i += 1;
             Some(AxiDmaChannel::new(hw_info, DmaChannelMode::S2MM, udmabuf_name)?)
         };
 
@@ -235,7 +226,7 @@ impl AxiDma {
     }
     pub fn write<V>(&mut self, data: &[V]) -> Result<()> {
         if let Some(ch) = &mut self.mm2s {
-            ch.write(data);
+            ch.write(data)?;
         }
         else {
             bail!("The MM2S channel is not supported on this IP.");
