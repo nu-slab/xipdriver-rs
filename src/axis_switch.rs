@@ -37,14 +37,14 @@ impl AxisSwitch {
         })
     }
 
-    pub fn enable_mi_port(&mut self, mi_index: usize, si_port: u32) {
+    pub fn enable_mi_port(&self, mi_index: usize, si_port: u32) {
         let mi_port_addr = 0x40 + 4 * mi_index;
 
         unsafe {
             self.uio_acc.write_mem32(mi_port_addr, si_port);
         }
     }
-    pub fn disable_mi_port(&mut self, mi_index: usize) {
+    pub fn disable_mi_port(&self, mi_index: usize) {
         let mi_port_addr = 0x40 + 4 * mi_index;
 
         unsafe {
@@ -73,7 +73,7 @@ impl AxisSwitch {
         (reg_value >> 31) != 0
     }
 
-    pub fn disable_all_mi_ports(&mut self) {
+    pub fn disable_all_mi_ports(&self) {
         for mi_index in 0..16 {
             let mi_port_addr = 0x40 + 4 * mi_index;
 
@@ -83,14 +83,14 @@ impl AxisSwitch {
         }
     }
 
-    pub fn reg_update_enable(&mut self) {
+    pub fn reg_update_enable(&self) {
         unsafe {
             let reg_value = self.uio_acc.read_mem32(0x00);
             self.uio_acc.write_mem32(0x00, reg_value | 0x02);
         }
     }
 
-    pub fn reg_update_disable(&mut self) {
+    pub fn reg_update_disable(&self) {
         unsafe {
             let reg_value = self.uio_acc.read_mem32(0x00);
             self.uio_acc.write_mem32(0x00, reg_value & (!0x02));

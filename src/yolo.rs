@@ -94,7 +94,7 @@ impl Yolo {
         unsafe { self.uio_acc.read_mem32(0x00) & 1 != 1 }
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&self) {
         let auto_restart = unsafe {
             self.uio_acc.read_mem32(0x00) & 0x80
         };
