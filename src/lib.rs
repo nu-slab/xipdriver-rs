@@ -6,3 +6,5 @@ pub mod umv_lane_detector;
 pub mod hwinfo;
 pub mod umv_motor_controller;
 pub mod axidma;
+pub mod yolo;
+pub mod axis_switch;
