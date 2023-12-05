@@ -120,6 +120,12 @@ impl AxiDmaChannel {
             "DMA channel not idle"
         );
         let size = core::mem::size_of::<V>();
+        ensure!(
+            data.len() * size <= self.udmabuf_acc.phys_addr(),
+            "Array size too large ({}/{})",
+            data.len() * size,
+            self.udmabuf_acc.phys_addr()
+        );
         unsafe {
             self.udmabuf_acc
                 .copy_from(data.as_ptr(), 0, data.len() * size);
@@ -129,7 +135,7 @@ impl AxiDmaChannel {
         self.first_transfer = false;
         Ok(())
     }
-    pub fn write_with_size<V>(&mut self, data: &[V], size: usize) -> Result<()> {
+    pub unsafe fn write_with_size<V>(&mut self, data: *const V, size: usize) -> Result<()> {
         ensure!(
             self.mode == DmaChannelMode::MM2S,
             "Channel mode is not MM2S"
@@ -139,17 +145,14 @@ impl AxiDmaChannel {
             self.is_idle() || self.first_transfer,
             "DMA channel not idle"
         );
-        ensure!(
-            size <= data.len(),
-            "The size of the transfer is too large. ({} > {})",
-            size,
-            data.len()
-        );
         let size_of_v = core::mem::size_of::<V>();
-        unsafe {
-            self.udmabuf_acc
-                .copy_from(data.as_ptr(), 0, size * size_of_v);
-        }
+        ensure!(
+            size_of_v * size <= self.udmabuf_acc.phys_addr(),
+            "Array size too large ({}/{})",
+            size_of_v * size,
+            self.udmabuf_acc.phys_addr()
+        );
+        self.udmabuf_acc.copy_from(data, 0, size * size_of_v);
         self.write_buf_addr();
         self.write_len((size * size_of_v) as u32);
         self.first_transfer = false;
@@ -271,7 +274,7 @@ impl AxiDma {
         }
         Ok(())
     }
-    pub fn write_with_size<V>(&mut self, data: &[V], size: usize) -> Result<()> {
+    pub unsafe fn write_with_size<V>(&mut self, data: *const V, size: usize) -> Result<()> {
         if let Some(ch) = &mut self.mm2s {
             ch.write_with_size(data, size)?;
         } else {
