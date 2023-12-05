@@ -128,7 +128,7 @@ impl AxiDmaChannel {
         );
         unsafe {
             self.udmabuf_acc
-                .copy_from(data.as_ptr(), 0, data.len() * size);
+                .copy_from(data.as_ptr(), 0, data.len());
         }
         self.write_buf_addr();
         self.write_len((data.len() * size) as u32);
@@ -152,7 +152,7 @@ impl AxiDmaChannel {
             size_of_v * size,
             self.udmabuf_acc.phys_addr()
         );
-        self.udmabuf_acc.copy_from(data, 0, size * size_of_v);
+        self.udmabuf_acc.copy_from(data, 0, size);
         self.write_buf_addr();
         self.write_len((size * size_of_v) as u32);
         self.first_transfer = false;
