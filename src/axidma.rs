@@ -173,13 +173,13 @@ impl AxiDmaChannel {
         let bytes = size * len;
         self.write_len(bytes as u32);
 
-        let mut buf = Vec::with_capacity(size);
+        let mut buf = Vec::with_capacity(len);
 
         self.wait()?;
 
         unsafe {
-            self.udmabuf_acc.copy_to(0x00, buf.as_mut_ptr(), bytes);
-            buf.set_len(bytes / size);
+            self.udmabuf_acc.copy_to(0x00, buf.as_mut_ptr(), len);
+            buf.set_len(len);
         }
 
         self.first_transfer = false;
