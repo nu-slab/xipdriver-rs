@@ -221,7 +221,7 @@ impl AxiDma {
         );
         let udmabuf_names = json_as_vec!(hw_object["udmabuf"]);
         let mut udmabuf_i = 0;
-        let mm2s = if hw_params["C_NUM_MM2S_CHANNELS"] == 0 {
+        let mm2s = if hw_params["C_INCLUDE_MM2S"] == 0 {
             None
         } else {
             let udmabuf_name = json_as_str!(udmabuf_names[udmabuf_i]);
@@ -233,7 +233,7 @@ impl AxiDma {
             )?)
         };
 
-        let s2mm = if hw_params["C_NUM_S2MM_CHANNELS"] == 0 {
+        let s2mm = if hw_params["C_INCLUDE_S2MM"] == 0 {
             None
         } else {
             let udmabuf_name = json_as_str!(udmabuf_names[udmabuf_i]);
