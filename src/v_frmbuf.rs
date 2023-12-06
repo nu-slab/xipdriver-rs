@@ -6,6 +6,48 @@ use crate::json_as_map;
 use crate::json_as_str;
 use crate::json_as_u32;
 
+#[derive(Clone, Copy, Debug)]
+pub enum ColorFormat {
+    /* Video in memory formats */
+    Rgbx8 = 10,   // [31:0] x:B:G:R 8:8:8:8
+    Yuvx8,        // [31:0] x:V:U:Y 8:8:8:8
+    Yuyv8,        // [31:0] V:Y:U:Y 8:8:8:8
+    Rgba8,        // [31:0] A:B:G:R 8:8:8:8
+    Yuva8,        // [31:0] A:V:U:Y 8:8:8:8
+    Rgbx10,       // [31:0] x:B:G:R 2:10:10:10
+    Yuvx10,       // [31:0] x:V:U:Y 2:10:10:10
+
+
+    Rgb565,       // [15:0] B:G:R 5:6:5
+    YUv8,         // [15:0] Y:Y 8:8, [15:0] V:U 8:8
+    YUv8420,      // [15:0] Y:Y 8:8, [15:0] V:U 8:8
+    Rgb8,         // [23:0] B:G:R 8:8:8
+    Yuv8,         // [24:0] V:U:Y 8:8:8
+    YUv10,        // [31:0] x:Y:Y:Y 2:10:10:10 [31:0] x:U:V:U 2:10:10:10
+    YUv10_420,    // [31:0] x:Y:Y:Y 2:10:10:10 [31:0] x:U:V:U 2:10:10:10
+    Y8,           // [31:0] Y:Y:Y:Y 8:8:8:8
+    Y10,          // [31:0] x:Y:Y:Y 2:10:10:10
+    Bgra8,        // [31:0] A:R:G:B 8:8:8:8
+    Bgrx8,        // [31:0] X:R:G:B 8:8:8:8
+    Uyvy8,        // [31:0] Y:V:Y:U 8:8:8:8
+    Bgr8,         // [23:0] R:G:B 8:8:8
+    Rgbx12,       // [39:0] x:R:G:B 4:12:12:12
+    Yuvx12,       // [39:0] x:V:U:Y 4:12:12:12
+    YUv12,        // [23:0] Y:Y 12:12, [23:0] V:U 12:12
+    YUv12_420,     // [23:0] Y:Y 12:12, [23:0] V:U 12:12
+    Y12,          // [39:0] x:Y2:Y1:Y0 4:12:12:12
+    Rgb16,        // [47:0] R:G:B 16:16:16
+    Yuv16,        // [47:0] V:U:Y 16:16:16
+    YUv16,        // [31:0] Y:Y 16:16, [31:0] V:U 16:16
+    Yuv16_420,     // [31:0] Y:Y 16:16, [31:0] V:U 16:16
+    Y16,          // [47:0] Y2:Y1:Y0 16:16:16
+    RGb8,         // [7:0] R:8, [7:0] G:8, [7:0] B:8
+    YUV8_420,      // [15:0] Y:Y 8:8, [7:0] U:8, [7:0] V:8
+    YUV8,         // [7:0] Y:8, [7:0] U:8, [7:0] V:8
+    YUV10,       // [9:0] Y:10, [9:0] U:10, [9:0] V:10
+}
+
+
 pub struct VideoFrameBufRead {
     uio_acc: UioAccessor<usize>,
     udmabuf_acc: UdmabufAccessor<usize>,
@@ -147,12 +189,10 @@ impl VideoFrameBufRead {
     pub fn write_frame<V>(&mut self, frame: *const V) -> Result<()> {
         ensure!(self.frame_width <= self.max_width, "FRAME_WIDTH too large");
         ensure!(self.frame_height <= self.max_height, "FRAME_HEIGHT too large");
-        let count = if core::mem::size_of::<V>() == 1 {
-            (self.frame_width * self.frame_height * self.bytes_per_pix) as usize
-        } else {
-            1
-        };
-        ensure!(core::mem::size_of::<V>() * count < self.udmabuf_acc.phys_addr(), "Array size too large");
+        let size_of_v = core::mem::size_of::<V>();
+        let count = (self.frame_width * self.frame_height * self.bytes_per_pix) as usize;
+        ensure!(size_of_v * count < self.udmabuf_acc.phys_addr(), "Array size too large");
+        ensure!(size_of_v == 1, "Unsupported data format: {}", size_of_v);
         // self.stop();
         unsafe {
             self.udmabuf_acc.copy_from(frame, 0x00, count);
@@ -209,6 +249,38 @@ impl VideoFrameBufRead {
     }
     pub fn untie(&mut self) {
         self.tie_en = false;
+    }
+    pub fn calc_stride(&self, fmt: ColorFormat) -> u32 {
+        let mm_width_bytes = self.pix_per_clk * 8;
+
+        let (bpp_numerator, bpp_denominator) = match fmt {
+            ColorFormat::YUv10 | ColorFormat::YUv10_420 | ColorFormat::Y10 => {
+                (4, 3)
+            },
+            ColorFormat::YUv8 | ColorFormat::YUv8420 | ColorFormat::Y8 | ColorFormat::YUV10 => {
+                (1, 1)
+            },
+            ColorFormat::Rgb8 | ColorFormat::Yuv8 | ColorFormat::Bgr8 => {
+                (3, 1)
+            },
+            ColorFormat::Rgbx12 | ColorFormat::Yuvx12 => {
+                (5, 1)
+            },
+            ColorFormat::YUv12 | ColorFormat::YUv12_420 | ColorFormat::Y12 => {
+                (3, 2)
+            },
+            ColorFormat::Rgb16 | ColorFormat::Yuv16 => {
+                (6, 1)
+            },
+            ColorFormat::Yuyv8 | ColorFormat::Uyvy8 | ColorFormat::YUv16 | ColorFormat::Yuv16_420 | ColorFormat::Y16 => {
+                 (2, 1)
+            },
+            _ => {
+                (4, 1)
+            }
+        };
+
+        ((((self.frame_width * bpp_numerator) / bpp_denominator) + mm_width_bytes - 1) / mm_width_bytes) * mm_width_bytes
     }
 }
 
