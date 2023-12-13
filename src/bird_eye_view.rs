@@ -11,7 +11,6 @@ pub struct BirdEyeViewHW {
     udmabuf_acc: Vec<UdmabufAccessor<usize>>,
     max_width: u32,
     max_height: u32,
-    bytes_per_pix: u32,
 }
 
 impl BirdEyeViewHW {
@@ -57,7 +56,6 @@ impl BirdEyeViewHW {
             udmabuf_acc: udmabuf,
             max_width: 1280,
             max_height: 720,
-            bytes_per_pix: 4,
         })
     }
 
@@ -78,18 +76,21 @@ impl BirdEyeViewHW {
     pub fn get_auto_restart_enable(&self) -> bool {
         unsafe { self.uio_acc.read_mem32(0x00) & 0x20 == 0x20 }
     }
+
     pub fn set_auto_restart_enable(&self, en: bool) {
         let reg = if en { 0x20 } else { 0 };
         unsafe {
             self.uio_acc.write_mem32(0x00, reg);
         }
     }
+
     pub fn start_once(&mut self) -> Result<()> {
         unsafe {
             self.uio_acc.write_mem32(0x00, 0x01);
         }
         Ok(())
     }
+
     pub fn set_img_in_addr(&mut self) -> Result<()> {
         unsafe {
             self.uio_acc
@@ -101,7 +102,7 @@ impl BirdEyeViewHW {
     pub fn set_img_map_addr(&mut self) -> Result<()> {
         unsafe {
             self.uio_acc
-                .write_mem32(0x30, self.udmabuf_acc[1].phys_addr() as u32);
+                .write_mem32(0x24, self.udmabuf_acc[1].phys_addr() as u32);
         }
         Ok(())
     }
@@ -109,26 +110,34 @@ impl BirdEyeViewHW {
     pub fn set_img_out_addr(&mut self) -> Result<()> {
         unsafe {
             self.uio_acc
-                .write_mem32(0x24, self.udmabuf_acc[2].phys_addr() as u32);
+                .write_mem32(0x30, self.udmabuf_acc[2].phys_addr() as u32);
         }
         Ok(())
     }
 
-    pub fn map_img_in(&mut self, img_in: &[u32]) -> Result<()> {
+    pub fn write_img_in(&mut self, img_in: &[u32]) -> Result<()> {
+        ensure!(
+            img_in.len() <= self.udmabuf_acc[0].size,
+            "img_in.len() too large"
+        );
         unsafe {
             self.udmabuf_acc[0].copy_from(img_in.as_ptr(), 0x00, img_in.len());
         }
         Ok(())
     }
 
-    pub fn map_img_map(&mut self, img_map: &[u32]) -> Result<()> {
+    pub fn write_img_map(&mut self, img_map: &[u32]) -> Result<()> {
+        ensure!(
+            img_map.len() <= self.udmabuf_acc[1].size,
+            "img_map.len() too large"
+        );
         unsafe {
             self.udmabuf_acc[1].copy_from(img_map.as_ptr(), 0x00, img_map.len());
         }
         Ok(())
     }
 
-    pub fn map_img_out(&mut self) -> Result<Vec<u32>> {
+    pub fn read_img_out(&mut self) -> Result<Vec<u32>> {
         let w = self.max_width as usize;
         let h = self.max_height as usize;
         let mut buf = Vec::with_capacity(w * h);
