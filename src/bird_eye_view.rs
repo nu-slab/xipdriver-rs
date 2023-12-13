@@ -117,7 +117,7 @@ impl BirdEyeViewHW {
 
     pub fn write_img_in(&mut self, img_in: &[u32]) -> Result<()> {
         ensure!(
-            img_in.len() <= self.udmabuf_acc[0].size,
+            img_in.len() <= self.udmabuf_acc[0].size(),
             "img_in.len() too large"
         );
         unsafe {
@@ -128,7 +128,7 @@ impl BirdEyeViewHW {
 
     pub fn write_img_map(&mut self, img_map: &[u32]) -> Result<()> {
         ensure!(
-            img_map.len() <= self.udmabuf_acc[1].size,
+            img_map.len() <= self.udmabuf_acc[1].size(),
             "img_map.len() too large"
         );
         unsafe {
