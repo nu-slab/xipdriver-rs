@@ -94,13 +94,13 @@ impl BirdEyeViewHW {
         }
     }
 
-    pub fn set_img_out_addr(&mut self) -> Result<()> {
+    pub fn set_img_map_addr(&mut self) -> Result<()> {
         unsafe {
             self.write_mem32(0x30, self.udmabuf_acc[1].phys_addr() as u32);
         }
     }
 
-    pub fn set_img_map_addr(&mut self) -> Result<()> {
+    pub fn set_img_out_addr(&mut self) -> Result<()> {
         unsafe {
             self.write_mem32(0x24, self.udmabuf_acc[2].phys_addr() as u32);
         }
