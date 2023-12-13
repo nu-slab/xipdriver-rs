@@ -131,11 +131,10 @@ impl BirdEyeViewHW {
     pub fn map_img_out(&mut self) -> Result<Vec<u32>> {
         let w = self.max_width as usize;
         let h = self.max_height as usize;
-        let bpp = self.bytes_per_pix as usize;
-        let mut buf = Vec::with_capacity(w * h * bpp);
+        let mut buf = Vec::with_capacity(w * h);
         unsafe {
-            self.udmabuf_acc[2].copy_to(0x00, buf.as_mut_ptr(), w * h * bpp);
-            buf.set_len(w * h * bpp);
+            self.udmabuf_acc[2].copy_to(0x00, buf.as_mut_ptr(), w * h);
+            buf.set_len(w * h);
         }
         Ok(buf)
     }
