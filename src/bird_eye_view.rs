@@ -151,4 +151,10 @@ impl BirdEyeViewHW {
         }
         Ok(buf)
     }
+
+    pub fn print_udma_size(&mut self) {
+        for (i, udmabuf) in self.udmabuf_acc.iter().enumerate() {
+            println!("udmabuf {} size : {}", i, udmabuf.size());
+        }
+    }
 }
