@@ -11,6 +11,7 @@ pub struct BirdEyeViewHW {
     udmabuf_acc: Vec<UdmabufAccessor<usize>>,
     max_width: u32,
     max_height: u32,
+    bytes_per_pixel: u32,
 }
 
 impl BirdEyeViewHW {
@@ -56,6 +57,7 @@ impl BirdEyeViewHW {
             udmabuf_acc: udmabuf,
             max_width: 1280,
             max_height: 720,
+            bytes_per_pixel: 3,
         })
     }
 
@@ -115,10 +117,10 @@ impl BirdEyeViewHW {
         Ok(())
     }
 
-    pub fn write_img_in(&mut self, img_in: &[u32]) -> Result<()> {
+    pub fn write_img_in(&mut self, img_in: &[u8]) -> Result<()> {
         ensure!(
-            img_in.len() <= self.udmabuf_acc[0].size(),
-            "img_in.len() is too large\n img_in.len() : {}\n udmabuf : {}",
+            img_in.len() * core::mem::size_of::<u8>() <= self.udmabuf_acc[0].size(),
+            "img_in.size is too large\n img_in.len() : {}\n udmabuf : {}",
             img_in.len(),
             self.udmabuf_acc[0].size()
         );
@@ -128,10 +130,10 @@ impl BirdEyeViewHW {
         Ok(())
     }
 
-    pub fn write_img_map(&mut self, img_map: &[u32]) -> Result<()> {
+    pub fn write_img_map(&mut self, img_map: &[u8]) -> Result<()> {
         ensure!(
-            img_map.len() <= self.udmabuf_acc[1].size(),
-            "img_map.len() is too large\n img_map.len() : {}\n udmabuf : {}",
+            img_map.len() * core::mem::size_of::<u8>() <= self.udmabuf_acc[1].size(),
+            "img_map.size is too large\n img_map.len() : {}\n udmabuf : {}",
             img_map.len(),
             self.udmabuf_acc[1].size()
         );
@@ -141,13 +143,15 @@ impl BirdEyeViewHW {
         Ok(())
     }
 
-    pub fn read_img_out(&mut self) -> Result<Vec<u32>> {
+    pub fn read_img_out(&mut self) -> Result<Vec<u8>> {
         let w = self.max_width as usize;
         let h = self.max_height as usize;
-        let mut buf = Vec::with_capacity(w * h);
+        let bpp = self.bytes_per_pixel as usize;
+        let vec_cap = w * h * bpp;
+        let mut buf = Vec::with_capacity(vec_cap);
         unsafe {
-            self.udmabuf_acc[2].copy_to(0x00, buf.as_mut_ptr(), w * h);
-            buf.set_len(w * h);
+            self.udmabuf_acc[2].copy_to(0x00, buf.as_mut_ptr(), vec_cap);
+            buf.set_len(vec_cap);
         }
         Ok(buf)
     }
@@ -155,6 +159,11 @@ impl BirdEyeViewHW {
     pub fn print_udma_size(&mut self) {
         for (i, udmabuf) in self.udmabuf_acc.iter().enumerate() {
             println!("udmabuf {} size : {}", i, udmabuf.size());
+        }
+    }
+    pub fn pring_udma_phys_addr(&mut self) {
+        for (i, udmabuf) in self.udmabuf_acc.iter().enumerate() {
+            println!("udmabuf {} size : {}", i, udmabuf.phys_addr());
         }
     }
 }
