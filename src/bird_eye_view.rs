@@ -130,9 +130,9 @@ impl BirdEyeViewHW {
         Ok(())
     }
 
-    pub fn write_img_map(&mut self, img_map: &[u8]) -> Result<()> {
+    pub fn write_img_map(&mut self, img_map: &[u32]) -> Result<()> {
         ensure!(
-            img_map.len() * core::mem::size_of::<u8>() <= self.udmabuf_acc[1].size(),
+            img_map.len() * core::mem::size_of::<u32>() <= self.udmabuf_acc[1].size(),
             "img_map.size is too large\n img_map.len() : {}\n udmabuf : {}",
             img_map.len(),
             self.udmabuf_acc[1].size()
